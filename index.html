@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高级美颜用量分析看板</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0f1117;--bg2:#181b25;--card:#1e2233;--card-hover:#252a3a;
+  --border:#2a2f42;--primary:#6c8cff;--primary-glow:rgba(108,140,255,.25);
+  --accent:#a78bfa;--success:#34d399;--danger:#f87171;--warning:#fbbf24;
+  --text:#e8eaed;--text2:#9ca3af;--text3:#6b7280;
+  --radius:16px;--shadow:0 4px 24px rgba(0,0,0,.3);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
+
+/* Animated background */
+body::before{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 20% 50%,rgba(108,140,255,.06) 0%,transparent 50%),radial-gradient(circle at 80% 20%,rgba(167,139,250,.05) 0%,transparent 50%),radial-gradient(circle at 50% 80%,rgba(52,211,153,.04) 0%,transparent 50%);animation:bgShift 20s ease-in-out infinite;z-index:-1;pointer-events:none}
+@keyframes bgShift{0%,100%{transform:translate(0,0)}50%{transform:translate(-3%,-3%)}}
+
+/* Header */
+.header{padding:32px 40px 24px;position:relative;overflow:hidden}
+.header::after{content:'';position:absolute;bottom:0;left:40px;right:40px;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)}
+.header h1{font-size:26px;font-weight:700;background:linear-gradient(135deg,#6c8cff,#a78bfa,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block}
+.header p{color:var(--text2);font-size:13px;margin-top:4px;letter-spacing:1px;text-transform:uppercase}
+.header-meta{display:flex;gap:20px;margin-top:10px;flex-wrap:wrap}
+.header-meta .meta-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2)}
+.header-meta .meta-label{color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.header-meta .meta-value{color:#fff;font-weight:600;font-size:13px}
+.header-meta .meta-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.header-meta .meta-dot.live{background:var(--success);box-shadow:0 0 8px var(--success);animation:blink 2s infinite}
+.header-meta .meta-dot.data{background:var(--primary)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+.container{max-width:1480px;margin:0 auto;padding:24px 32px 80px}
+
+/* Animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes countUp{from{opacity:0}to{opacity:1}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--primary-glow)}50%{box-shadow:0 0 20px 4px var(--primary-glow)}}
+.fade-up{animation:fadeUp .6s ease both}
+.fade-up-1{animation-delay:.1s}.fade-up-2{animation-delay:.2s}.fade-up-3{animation-delay:.3s}.fade-up-4{animation-delay:.4s}.fade-up-5{animation-delay:.5s}
+
+/* Insight Banner */
+.insight-banner{background:linear-gradient(135deg,rgba(108,140,255,.12),rgba(167,139,250,.08));border:1px solid rgba(108,140,255,.2);border-radius:var(--radius);padding:20px 28px;margin-bottom:24px;position:relative;overflow:hidden}
+.insight-banner::before{content:'';position:absolute;top:-20px;right:-20px;width:120px;height:120px;background:radial-gradient(circle,rgba(108,140,255,.15),transparent 70%);border-radius:50%}
+.insight-banner .insight-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:var(--primary);margin-bottom:12px}
+.insight-banner .insight-title::before{content:'';display:inline-block;width:4px;height:18px;background:linear-gradient(180deg,var(--primary),var(--accent));border-radius:2px}
+.insight-items{display:flex;flex-direction:column;gap:8px}
+.insight-item{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--text);line-height:1.7}
+.insight-dot{width:6px;height:6px;border-radius:50%;margin-top:8px;flex-shrink:0}
+.insight-dot.up{background:var(--success)}.insight-dot.down{background:var(--danger)}.insight-dot.info{background:var(--primary)}
+
+/* Filters */
+.filters-bar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;align-items:center;position:relative;z-index:100}
+.filter-group{display:flex;align-items:center;gap:6px}
+.filter-group label{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.filter-group select{padding:7px 14px;border:1px solid var(--border);border-radius:10px;font-size:13px;background:var(--card);color:var(--text);cursor:pointer;outline:none;transition:all .2s}
+.filter-group select:hover,.filter-group select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+
+/* Multi-select */
+.multi-select{position:relative;min-width:240px}
+.multi-select-trigger{padding:7px 14px;border:1px solid var(--border);border-radius:10px;font-size:13px;background:var(--card);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:all .2s;user-select:none}
+.multi-select-trigger:hover{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.multi-select-trigger .arrow{font-size:10px;color:var(--text3);transition:transform .2s}
+.multi-select.open .arrow{transform:rotate(180deg)}
+.multi-select-dropdown{position:absolute;top:calc(100% + 6px);left:0;min-width:280px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:9999;max-height:320px;overflow-y:auto;display:none;animation:dropIn .2s ease}
+.multi-select.open .multi-select-dropdown{display:block}
+@keyframes dropIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.ms-search{padding:10px 14px;border-bottom:1px solid var(--border)}
+.ms-search input{width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:12px;outline:none}
+.ms-search input:focus{border-color:var(--primary)}
+.ms-actions{display:flex;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border)}
+.ms-actions button{font-size:11px;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px}
+.ms-actions button:hover{background:var(--primary-glow)}
+.ms-option{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;font-size:13px;transition:background .15s}
+.ms-option:hover{background:var(--card-hover)}
+.ms-option input[type=checkbox]{accent-color:var(--primary);width:15px;height:15px;cursor:pointer}
+.ms-tags{display:flex;flex-wrap:wrap;gap:4px;max-width:180px;overflow:hidden}
+.ms-tag{background:rgba(108,140,255,.15);color:var(--primary);padding:1px 8px;border-radius:6px;font-size:11px;white-space:nowrap}
+
+/* Cards */
+.cards-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;position:relative;overflow:hidden;transition:all .3s ease}
+.stat-card:hover{border-color:rgba(108,140,255,.3);transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px 2px 0 0}
+.stat-card:nth-child(1)::after{background:linear-gradient(90deg,#6c8cff,#a78bfa)}
+.stat-card:nth-child(2)::after{background:linear-gradient(90deg,#fbbf24,#f97316)}
+.stat-card:nth-child(3)::after{background:linear-gradient(90deg,#34d399,#06b6d4)}
+.stat-card:nth-child(4)::after{background:linear-gradient(90deg,#a78bfa,#ec4899)}
+.stat-card .card-label{font-size:12px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.stat-card .card-value{font-size:32px;font-weight:700;line-height:1.1;margin-bottom:8px}
+.stat-card:nth-child(1) .card-value{color:#6c8cff}
+.stat-card:nth-child(2) .card-value{color:#fbbf24}
+.stat-card:nth-child(3) .card-value{color:#34d399}
+.stat-card:nth-child(4) .card-value{color:#a78bfa}
+.card-change{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
+.card-change.up{background:rgba(52,211,153,.12);color:var(--success)}
+.card-change.down{background:rgba(248,113,113,.12);color:var(--danger)}
+.card-sub{font-size:11px;color:var(--text3);margin-top:6px}
+.card-icon{position:absolute;top:18px;right:18px;width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.card-icon-1{background:rgba(108,140,255,.1)}.card-icon-2{background:rgba(251,191,36,.1)}.card-icon-3{background:rgba(52,211,153,.1)}.card-icon-4{background:rgba(167,139,250,.1)}
+
+/* Chart sections */
+.section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:24px;transition:border-color .3s}
+.section:hover{border-color:rgba(108,140,255,.2)}
+.section-title{font-size:15px;font-weight:600;margin-bottom:18px;display:flex;align-items:center;gap:8px}
+.section-title::before{content:'';display:inline-block;width:3px;height:16px;background:linear-gradient(180deg,var(--primary),var(--accent));border-radius:2px}
+.chart-box{width:100%;height:380px}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{padding:12px 16px;text-align:left;font-weight:600;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;transition:color .2s}
+thead th:hover{color:var(--primary)}
+tbody td{padding:11px 16px;border-bottom:1px solid rgba(42,47,66,.5)}
+tbody tr{transition:background .2s}
+tbody tr:hover{background:var(--card-hover)}
+.text-right{text-align:right}
+.tag-up{color:var(--success);font-weight:600}.tag-down{color:var(--danger);font-weight:600}.tag-new{color:var(--primary);font-weight:600;font-size:11px}
+.sort-icon{margin-left:3px;font-size:10px;opacity:.4}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+
+/* Package alert */
+.pkg-alert-hint{font-size:11px;color:var(--text3);font-weight:400;margin-left:8px;text-transform:none;letter-spacing:0}
+.pkg-alert{background:rgba(248,113,113,.12);color:var(--danger);font-weight:700;border-radius:6px;padding:2px 10px}
+.pkg-ok{color:var(--success);font-weight:600}
+.os-badge{display:inline-block;padding:1px 10px;border-radius:8px;font-size:11px;font-weight:600}
+.os-badge.android{background:rgba(52,211,153,.12);color:#34d399}
+.os-badge.ios{background:rgba(108,140,255,.12);color:#6c8cff}
+.os-badge.windows{background:rgba(167,139,250,.12);color:#a78bfa}
+
+/* Biz divider */
+.biz-divider{text-align:center;margin:40px 0 28px;position:relative}
+.biz-divider::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)}
+.biz-divider span{position:relative;background:var(--bg);padding:0 20px;font-size:14px;font-weight:600;color:var(--primary);letter-spacing:1px}
+
+/* Timeline */
+.timeline{position:relative;padding-left:28px}
+.timeline::before{content:'';position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:linear-gradient(180deg,var(--primary),var(--accent),var(--success))}
+.tl-item{position:relative;padding:0 0 24px 20px}
+.tl-item:last-child{padding-bottom:0}
+.tl-item::before{content:'';position:absolute;left:-24px;top:6px;width:12px;height:12px;border-radius:50%;border:2px solid var(--primary);background:var(--bg);z-index:1;transition:all .3s}
+.tl-item:hover::before{background:var(--primary);box-shadow:0 0 12px var(--primary-glow)}
+.tl-item.milestone::before{background:var(--success);border-color:var(--success)}
+.tl-item.launch::before{background:var(--warning);border-color:var(--warning)}
+.tl-week{font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.tl-text{font-size:13px;color:var(--text);line-height:1.7}
+.tl-text b{color:var(--primary)}
+.tl-tag{display:inline-block;font-size:10px;padding:1px 8px;border-radius:10px;margin-left:6px;font-weight:600}
+.tl-tag.sdk{background:rgba(108,140,255,.15);color:var(--primary)}
+.tl-tag.online{background:rgba(52,211,153,.15);color:var(--success)}
+.tl-tag.biz{background:rgba(251,191,36,.15);color:var(--warning)}
+
+@media(max-width:1000px){.cards-grid{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.container{padding:16px}}
+@media(max-width:600px){.cards-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="header fade-up">
+  <h1>高级美颜用量分析看板</h1>
+  <div class="header-meta" id="headerMeta"></div>
+</div>
+
+<div class="container">
+
+  <!-- Insight Banner -->
+  <div class="insight-banner fade-up fade-up-1" id="insightBanner">
+    <div class="insight-title">核心观察</div>
+    <div class="insight-items" id="insightItems"></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar fade-up fade-up-2">
+    <div class="filter-group">
+      <label>日期范围</label>
+      <select id="dateRange">
+        <option value="all">全部</option>
+        <option value="7">最近 7 天</option>
+        <option value="14" selected>最近 14 天</option>
+        <option value="30">最近 30 天</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>客户类型</label>
+      <select id="customerType">
+        <option value="all">全部</option>
+        <option value="online">仅线上客户</option>
+        <option value="test">仅测试客户</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>客户选择</label>
+      <div class="multi-select" id="customerMultiSelect">
+        <div class="multi-select-trigger" id="msTrigger">
+          <span id="msLabel">全部客户</span>
+          <span class="arrow">▼</span>
+        </div>
+        <div class="multi-select-dropdown" id="msDropdown">
+          <div class="ms-search"><input type="text" placeholder="搜索客户..." id="msSearch"></div>
+          <div class="ms-actions">
+            <button id="msSelectAll">全选</button>
+            <button id="msClearAll">清空</button>
+            <button id="msOnlyOnline">仅线上</button>
+          </div>
+          <div id="msOptions"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="cards-grid fade-up fade-up-2">
+    <div class="stat-card">
+      <div class="card-icon card-icon-1">👤</div>
+      <div class="card-label">单日去重主播数</div>
+      <div class="card-value" id="cardUid">-</div>
+      <div class="card-change" id="cardUidChange"></div>
+      <div class="card-sub" id="cardUidSub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="card-icon card-icon-2">⏱</div>
+      <div class="card-label">单日视频分钟数</div>
+      <div class="card-value" id="cardMin">-</div>
+      <div class="card-change" id="cardMinChange"></div>
+      <div class="card-sub" id="cardMinSub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="card-icon card-icon-3">📊</div>
+      <div class="card-label">本周日均主播数</div>
+      <div class="card-value" id="cardWeekUid">-</div>
+      <div class="card-change" id="cardWeekUidChange"></div>
+      <div class="card-sub" id="cardWeekUidSub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="card-icon card-icon-4">🏢</div>
+      <div class="card-label">线上客户数</div>
+      <div class="card-value" id="cardCustCount">-</div>
+      <div class="card-change" id="cardCustChange"></div>
+      <div class="card-sub" id="cardCustSub"></div>
+    </div>
+  </div>
+
+  <!-- Daily Trend Charts -->
+  <div class="grid-2">
+    <div class="section fade-up fade-up-3">
+      <div class="section-title">每日去重主播数趋势</div>
+      <div class="chart-box" id="chartUid"></div>
+    </div>
+    <div class="section fade-up fade-up-3">
+      <div class="section-title">每日视频分钟数趋势</div>
+      <div class="chart-box" id="chartMin"></div>
+    </div>
+  </div>
+
+  <!-- Weekly -->
+  <div class="grid-2">
+    <div class="section fade-up fade-up-4">
+      <div class="section-title">周维度对比</div>
+      <div class="chart-box" id="chartWeekly"></div>
+    </div>
+    <div class="section fade-up fade-up-4">
+      <div class="section-title">周数据明细</div>
+      <div style="overflow-x:auto">
+        <table id="weeklyTable"><thead><tr>
+          <th>周</th><th class="text-right">天数</th><th class="text-right">日均主播数</th><th class="text-right">周环比</th><th class="text-right">日均分钟数</th><th class="text-right">周环比</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customer Trend -->
+  <div class="section fade-up fade-up-5">
+    <div class="section-title">客户维度趋势（线上 TOP5 主播数）</div>
+    <div class="chart-box" id="chartCustTrend" style="height:420px"></div>
+  </div>
+
+  <!-- OS Dimension -->
+  <div class="grid-2">
+    <div class="section fade-up fade-up-5">
+      <div class="section-title">OS 维度 — 每日去重主播数</div>
+      <div class="chart-box" id="chartOsUid"></div>
+    </div>
+    <div class="section fade-up fade-up-5">
+      <div class="section-title">OS 维度 — 每日视频分钟数</div>
+      <div class="chart-box" id="chartOsMin"></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="section fade-up fade-up-5">
+      <div class="section-title">OS 占比分布（最新日期）</div>
+      <div class="chart-box" id="chartOsPie" style="height:320px"></div>
+    </div>
+    <div class="section fade-up fade-up-5">
+      <div class="section-title">包名数量监控（每 VID 每平台）<span class="pkg-alert-hint">超过 6 个包标红告警</span></div>
+      <div style="overflow-x:auto;max-height:360px;overflow-y:auto">
+        <table id="pkgTable"><thead><tr>
+          <th>客户</th><th>VID</th><th>平台</th><th class="text-right">包数量</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customer Table -->
+  <div class="section fade-up fade-up-5">
+    <div class="section-title">客户维度明细（最新日期数据）</div>
+    <div style="overflow-x:auto">
+      <table id="custTable"><thead><tr>
+        <th data-sort="customer">客户 <span class="sort-icon">↕</span></th>
+        <th data-sort="uid" class="text-right">去重主播数 <span class="sort-icon">↕</span></th>
+        <th data-sort="minutes" class="text-right">视频分钟数 <span class="sort-icon">↕</span></th>
+        <th data-sort="uidPct" class="text-right">主播数日环比 <span class="sort-icon">↕</span></th>
+        <th data-sort="minPct" class="text-right">分钟数日环比 <span class="sort-icon">↕</span></th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <!-- Business Progress -->
+  <div class="biz-divider fade-up">
+    <span>商业化进展（来源：个人产品周报）</span>
+  </div>
+
+  <div class="grid-2">
+    <div class="section fade-up">
+      <div class="section-title">客户漏斗变化趋势</div>
+      <div class="chart-box" id="chartFunnel" style="height:380px"></div>
+    </div>
+    <div class="section fade-up">
+      <div class="section-title">累计沟通客户数 & 已上线客户数</div>
+      <div class="chart-box" id="chartPipeline" style="height:380px"></div>
+    </div>
+  </div>
+
+  <div class="section fade-up">
+    <div class="section-title">关键里程碑时间线</div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+</div>
+
+<script>
+// ==================== DATA ====================
+const RAW={"daily":[{"date":20260126,"dateFmt":"2026-01-26","uid":24,"minutes":0.0},{"date":20260127,"dateFmt":"2026-01-27","uid":20,"minutes":0.0},{"date":20260128,"dateFmt":"2026-01-28","uid":16,"minutes":0.0},{"date":20260129,"dateFmt":"2026-01-29","uid":34,"minutes":0.0},{"date":20260130,"dateFmt":"2026-01-30","uid":53,"minutes":0.0},{"date":20260131,"dateFmt":"2026-01-31","uid":56,"minutes":0.0},{"date":20260201,"dateFmt":"2026-02-01","uid":68,"minutes":0.0},{"date":20260202,"dateFmt":"2026-02-02","uid":121,"minutes":0.0},{"date":20260203,"dateFmt":"2026-02-03","uid":181,"minutes":0.0},{"date":20260204,"dateFmt":"2026-02-04","uid":245,"minutes":0.0},{"date":20260205,"dateFmt":"2026-02-05","uid":244,"minutes":0.0},{"date":20260206,"dateFmt":"2026-02-06","uid":258,"minutes":0.0},{"date":20260207,"dateFmt":"2026-02-07","uid":250,"minutes":0.0},{"date":20260208,"dateFmt":"2026-02-08","uid":230,"minutes":0.0},{"date":20260209,"dateFmt":"2026-02-09","uid":236,"minutes":1011.1},{"date":20260210,"dateFmt":"2026-02-10","uid":233,"minutes":867.3},{"date":20260211,"dateFmt":"2026-02-11","uid":206,"minutes":623.7},{"date":20260212,"dateFmt":"2026-02-12","uid":214,"minutes":514.4},{"date":20260213,"dateFmt":"2026-02-13","uid":217,"minutes":752.4},{"date":20260214,"dateFmt":"2026-02-14","uid":221,"minutes":1152.4},{"date":20260215,"dateFmt":"2026-02-15","uid":199,"minutes":865.7},{"date":20260216,"dateFmt":"2026-02-16","uid":217,"minutes":692.6},{"date":20260217,"dateFmt":"2026-02-17","uid":211,"minutes":1445.7},{"date":20260218,"dateFmt":"2026-02-18","uid":179,"minutes":866.7},{"date":20260219,"dateFmt":"2026-02-19","uid":206,"minutes":739.8},{"date":20260220,"dateFmt":"2026-02-20","uid":167,"minutes":336.7},{"date":20260221,"dateFmt":"2026-02-21","uid":187,"minutes":644.9},{"date":20260222,"dateFmt":"2026-02-22","uid":173,"minutes":533.9},{"date":20260223,"dateFmt":"2026-02-23","uid":176,"minutes":827.8},{"date":20260224,"dateFmt":"2026-02-24","uid":197,"minutes":1276.6},{"date":20260225,"dateFmt":"2026-02-25","uid":185,"minutes":1353.6},{"date":20260226,"dateFmt":"2026-02-26","uid":323,"minutes":4811.6},{"date":20260227,"dateFmt":"2026-02-27","uid":728,"minutes":21690.3},{"date":20260228,"dateFmt":"2026-02-28","uid":752,"minutes":23743.1},{"date":20260301,"dateFmt":"2026-03-01","uid":679,"minutes":22962.7},{"date":20260302,"dateFmt":"2026-03-02","uid":687,"minutes":24857.9},{"date":20260303,"dateFmt":"2026-03-03","uid":754,"minutes":25831.8},{"date":20260304,"dateFmt":"2026-03-04","uid":781,"minutes":29448.6},{"date":20260305,"dateFmt":"2026-03-05","uid":881,"minutes":35028.5},{"date":20260306,"dateFmt":"2026-03-06","uid":907,"minutes":34957.3},{"date":20260307,"dateFmt":"2026-03-07","uid":888,"minutes":33248.3},{"date":20260308,"dateFmt":"2026-03-08","uid":1425,"minutes":50715.6},{"date":20260309,"dateFmt":"2026-03-09","uid":1071,"minutes":0.0}],"customerDaily":[{"date":20260126,"dateFmt":"2026-01-26","customer":"Erato","uid":1,"minutes":0.0},{"date":20260126,"dateFmt":"2026-01-26","customer":"成都煜展测试","uid":9,"minutes":0.0},{"date":20260126,"dateFmt":"2026-01-26","customer":"成都煜展线上","uid":1,"minutes":0.0},{"date":20260126,"dateFmt":"2026-01-26","customer":"秒榜测试","uid":4,"minutes":0.0},{"date":20260126,"dateFmt":"2026-01-26","customer":"鲸旗测试","uid":9,"minutes":0.0},{"date":20260127,"dateFmt":"2026-01-27","customer":"成都煜展测试","uid":6,"minutes":0.0},{"date":20260127,"dateFmt":"2026-01-27","customer":"秒榜测试","uid":3,"minutes":0.0},{"date":20260127,"dateFmt":"2026-01-27","customer":"鲸旗测试","uid":11,"minutes":0.0},{"date":20260128,"dateFmt":"2026-01-28","customer":"元蓬测试","uid":6,"minutes":0.0},{"date":20260128,"dateFmt":"2026-01-28","customer":"成都煜展测试","uid":3,"minutes":0.0},{"date":20260128,"dateFmt":"2026-01-28","customer":"秒榜测试","uid":1,"minutes":0.0},{"date":20260128,"dateFmt":"2026-01-28","customer":"鲸旗测试","uid":2,"minutes":0.0},{"date":20260128,"dateFmt":"2026-01-28","customer":"鲸旗线上","uid":4,"minutes":0.0},{"date":20260129,"dateFmt":"2026-01-29","customer":"成都煜展测试","uid":4,"minutes":0.0},{"date":20260129,"dateFmt":"2026-01-29","customer":"秒榜测试","uid":4,"minutes":0.0},{"date":20260129,"dateFmt":"2026-01-29","customer":"鲸旗测试","uid":1,"minutes":0.0},{"date":20260129,"dateFmt":"2026-01-29","customer":"鲸旗线上","uid":25,"minutes":0.0},{"date":20260130,"dateFmt":"2026-01-30","customer":"元蓬测试","uid":4,"minutes":0.0},{"date":20260130,"dateFmt":"2026-01-30","customer":"秒榜测试","uid":4,"minutes":0.0},{"date":20260130,"dateFmt":"2026-01-30","customer":"鲸旗线上","uid":45,"minutes":0.0},{"date":20260131,"dateFmt":"2026-01-31","customer":"成都煜展测试","uid":1,"minutes":0.0},{"date":20260131,"dateFmt":"2026-01-31","customer":"鲸旗线上","uid":55,"minutes":0.0},{"date":20260201,"dateFmt":"2026-02-01","customer":"字节微科测试","uid":2,"minutes":0.0},{"date":20260201,"dateFmt":"2026-02-01","customer":"字节微科线上","uid":1,"minutes":0.0},{"date":20260201,"dateFmt":"2026-02-01","customer":"成都煜展测试","uid":2,"minutes":0.0},{"date":20260201,"dateFmt":"2026-02-01","customer":"鲸旗线上","uid":63,"minutes":0.0},{"date":20260202,"dateFmt":"2026-02-02","customer":"元蓬测试","uid":7,"minutes":0.0},{"date":20260202,"dateFmt":"2026-02-02","customer":"字节微科测试","uid":1,"minutes":0.0},{"date":20260202,"dateFmt":"2026-02-02","customer":"字节微科线上","uid":1,"minutes":0.0},{"date":20260202,"dateFmt":"2026-02-02","customer":"成都煜展测试","uid":1,"minutes":0.0},{"date":20260202,"dateFmt":"2026-02-02","customer":"秒榜测试","uid":3,"minutes":0.0},{"date":20260202,"dateFmt":"2026-02-02","customer":"鲸旗线上","uid":108,"minutes":0.0},{"date":20260203,"dateFmt":"2026-02-03","customer":"字节微科测试","uid":2,"minutes":0.0},{"date":20260203,"dateFmt":"2026-02-03","customer":"字节微科线上","uid":1,"minutes":0.0},{"date":20260203,"dateFmt":"2026-02-03","customer":"成都煜展测试","uid":1,"minutes":0.0},{"date":20260203,"dateFmt":"2026-02-03","customer":"秒榜测试","uid":4,"minutes":0.0},{"date":20260203,"dateFmt":"2026-02-03","customer":"鲸旗线上","uid":173,"minutes":0.0},{"date":20260204,"dateFmt":"2026-02-04","customer":"元蓬测试","uid":8,"minutes":0.0},{"date":20260204,"dateFmt":"2026-02-04","customer":"字节微科测试","uid":2,"minutes":0.0},{"date":20260204,"dateFmt":"2026-02-04","customer":"成都煜展测试","uid":2,"minutes":0.0},{"date":20260204,"dateFmt":"2026-02-04","customer":"秒榜测试","uid":3,"minutes":0.0},{"date":20260204,"dateFmt":"2026-02-04","customer":"鲸旗线上","uid":230,"minutes":0.0},{"date":20260205,"dateFmt":"2026-02-05","customer":"字节微科测试","uid":1,"minutes":0.0},{"date":20260205,"dateFmt":"2026-02-05","customer":"山东千千飞测试","uid":2,"minutes":0.0},{"date":20260205,"dateFmt":"2026-02-05","customer":"成都煜展测试","uid":2,"minutes":0.0},{"date":20260205,"dateFmt":"2026-02-05","customer":"秒榜测试","uid":1,"minutes":0.0},{"date":20260205,"dateFmt":"2026-02-05","customer":"秒榜测试2","uid":1,"minutes":0.0},{"date":20260205,"dateFmt":"2026-02-05","customer":"鲸旗测试","uid":1,"minutes":0.0},{"date":20260205,"dateFmt":"2026-02-05","customer":"鲸旗线上","uid":236,"minutes":0.0},{"date":20260206,"dateFmt":"2026-02-06","customer":"成都煜展测试","uid":3,"minutes":0.0},{"date":20260206,"dateFmt":"2026-02-06","customer":"秒榜测试","uid":1,"minutes":0.0},{"date":20260206,"dateFmt":"2026-02-06","customer":"秒榜测试2","uid":1,"minutes":0.0},{"date":20260206,"dateFmt":"2026-02-06","customer":"鲸旗线上","uid":253,"minutes":0.0},{"date":20260207,"dateFmt":"2026-02-07","customer":"元蓬测试","uid":10,"minutes":0.0},{"date":20260207,"dateFmt":"2026-02-07","customer":"鲸旗线上","uid":240,"minutes":0.0},{"date":20260208,"dateFmt":"2026-02-08","customer":"元蓬测试","uid":2,"minutes":0.0},{"date":20260208,"dateFmt":"2026-02-08","customer":"鲸旗线上","uid":228,"minutes":0.0},{"date":20260209,"dateFmt":"2026-02-09","customer":"kittenChat测试","uid":1,"minutes":53.5},{"date":20260209,"dateFmt":"2026-02-09","customer":"成都煜展测试","uid":2,"minutes":0.0},{"date":20260209,"dateFmt":"2026-02-09","customer":"秒榜测试","uid":1,"minutes":0.0},{"date":20260209,"dateFmt":"2026-02-09","customer":"鲸旗测试","uid":3,"minutes":4.2},{"date":20260209,"dateFmt":"2026-02-09","customer":"鲸旗线上","uid":229,"minutes":953.4},{"date":20260210,"dateFmt":"2026-02-10","customer":"kittenChat测试","uid":1,"minutes":20.7},{"date":20260210,"dateFmt":"2026-02-10","customer":"成都煜展测试","uid":4,"minutes":4.7},{"date":20260210,"dateFmt":"2026-02-10","customer":"鲸旗测试","uid":3,"minutes":13.7},{"date":20260210,"dateFmt":"2026-02-10","customer":"鲸旗线上","uid":225,"minutes":828.2},{"date":20260211,"dateFmt":"2026-02-11","customer":"kittenChat测试","uid":1,"minutes":0.4},{"date":20260211,"dateFmt":"2026-02-11","customer":"成都煜展测试","uid":2,"minutes":2.2},{"date":20260211,"dateFmt":"2026-02-11","customer":"鲸旗线上","uid":203,"minutes":621.1},{"date":20260212,"dateFmt":"2026-02-12","customer":"kittenChat测试","uid":2,"minutes":14.2},{"date":20260212,"dateFmt":"2026-02-12","customer":"kittenChat线上","uid":8,"minutes":280.1},{"date":20260212,"dateFmt":"2026-02-12","customer":"元蓬测试","uid":1,"minutes":0.0},{"date":20260212,"dateFmt":"2026-02-12","customer":"成都煜展测试","uid":2,"minutes":0.0},{"date":20260212,"dateFmt":"2026-02-12","customer":"鲸旗线上","uid":201,"minutes":220.0},{"date":20260213,"dateFmt":"2026-02-13","customer":"kittenChat线上","uid":7,"minutes":409.1},{"date":20260213,"dateFmt":"2026-02-13","customer":"成都煜展测试","uid":3,"minutes":0.0},{"date":20260213,"dateFmt":"2026-02-13","customer":"鲸旗线上","uid":207,"minutes":343.3},{"date":20260214,"dateFmt":"2026-02-14","customer":"kittenChat线上","uid":6,"minutes":339.8},{"date":20260214,"dateFmt":"2026-02-14","customer":"鲸旗线上","uid":215,"minutes":812.6},{"date":20260215,"dateFmt":"2026-02-15","customer":"kittenChat线上","uid":7,"minutes":252.4},{"date":20260215,"dateFmt":"2026-02-15","customer":"鲸旗线上","uid":192,"minutes":613.3},{"date":20260216,"dateFmt":"2026-02-16","customer":"kittenChat线上","uid":8,"minutes":284.6},{"date":20260216,"dateFmt":"2026-02-16","customer":"鲸旗线上","uid":209,"minutes":408.1},{"date":20260217,"dateFmt":"2026-02-17","customer":"kittenChat线上","uid":6,"minutes":235.1},{"date":20260217,"dateFmt":"2026-02-17","customer":"鲸旗线上","uid":205,"minutes":1210.6},{"date":20260218,"dateFmt":"2026-02-18","customer":"kittenChat线上","uid":7,"minutes":225.9},{"date":20260218,"dateFmt":"2026-02-18","customer":"鲸旗线上","uid":172,"minutes":640.8},{"date":20260219,"dateFmt":"2026-02-19","customer":"kittenChat线上","uid":7,"minutes":165.2},{"date":20260219,"dateFmt":"2026-02-19","customer":"鲸旗线上","uid":199,"minutes":574.6},{"date":20260220,"dateFmt":"2026-02-20","customer":"kittenChat线上","uid":7,"minutes":107.2},{"date":20260220,"dateFmt":"2026-02-20","customer":"鲸旗线上","uid":160,"minutes":229.5},{"date":20260221,"dateFmt":"2026-02-21","customer":"kittenChat线上","uid":6,"minutes":132.2},{"date":20260221,"dateFmt":"2026-02-21","customer":"鲸旗线上","uid":181,"minutes":512.7},{"date":20260222,"dateFmt":"2026-02-22","customer":"kittenChat线上","uid":6,"minutes":107.4},{"date":20260222,"dateFmt":"2026-02-22","customer":"鲸旗线上","uid":167,"minutes":426.4},{"date":20260223,"dateFmt":"2026-02-23","customer":"kittenChat线上","uid":8,"minutes":112.2},{"date":20260223,"dateFmt":"2026-02-23","customer":"鲸旗线上","uid":168,"minutes":715.6},{"date":20260224,"dateFmt":"2026-02-24","customer":"kittenChat测试","uid":4,"minutes":54.2},{"date":20260224,"dateFmt":"2026-02-24","customer":"kittenChat线上","uid":32,"minutes":501.1},{"date":20260224,"dateFmt":"2026-02-24","customer":"元蓬测试","uid":3,"minutes":0.0},{"date":20260224,"dateFmt":"2026-02-24","customer":"成都煜展测试","uid":2,"minutes":14.7},{"date":20260224,"dateFmt":"2026-02-24","customer":"鲸旗测试","uid":1,"minutes":0.0},{"date":20260224,"dateFmt":"2026-02-24","customer":"鲸旗线上","uid":155,"minutes":706.5},{"date":20260225,"dateFmt":"2026-02-25","customer":"kittenChat测试","uid":4,"minutes":18.9},{"date":20260225,"dateFmt":"2026-02-25","customer":"kittenChat线上","uid":33,"minutes":895.7},{"date":20260225,"dateFmt":"2026-02-25","customer":"字节微科测试","uid":2,"minutes":0.1},{"date":20260225,"dateFmt":"2026-02-25","customer":"成都煜展测试","uid":3,"minutes":0.3},{"date":20260225,"dateFmt":"2026-02-25","customer":"核桃线上","uid":0,"minutes":0.0},{"date":20260225,"dateFmt":"2026-02-25","customer":"鲸旗线上","uid":143,"minutes":438.7},{"date":20260226,"dateFmt":"2026-02-26","customer":"kittenChat测试","uid":6,"minutes":33.3},{"date":20260226,"dateFmt":"2026-02-26","customer":"kittenChat线上","uid":160,"minutes":3828.6},{"date":20260226,"dateFmt":"2026-02-26","customer":"字节微科测试","uid":3,"minutes":3.0},{"date":20260226,"dateFmt":"2026-02-26","customer":"成都煜展测试","uid":2,"minutes":8.6},{"date":20260226,"dateFmt":"2026-02-26","customer":"核桃线上","uid":0,"minutes":0.0},{"date":20260226,"dateFmt":"2026-02-26","customer":"秒榜测试","uid":1,"minutes":0.0},{"date":20260226,"dateFmt":"2026-02-26","customer":"鲸旗测试","uid":9,"minutes":20.9},{"date":20260226,"dateFmt":"2026-02-26","customer":"鲸旗线上","uid":142,"minutes":917.2},{"date":20260227,"dateFmt":"2026-02-27","customer":"kittenChat测试","uid":7,"minutes":77.4},{"date":20260227,"dateFmt":"2026-02-27","customer":"kittenChat线上","uid":596,"minutes":21162.4},{"date":20260227,"dateFmt":"2026-02-27","customer":"字节微科测试","uid":4,"minutes":62.8},{"date":20260227,"dateFmt":"2026-02-27","customer":"成都煜展测试","uid":2,"minutes":8.3},{"date":20260227,"dateFmt":"2026-02-27","customer":"秒榜线上","uid":1,"minutes":0.0},{"date":20260227,"dateFmt":"2026-02-27","customer":"鲸旗测试","uid":4,"minutes":0.0},{"date":20260227,"dateFmt":"2026-02-27","customer":"鲸旗线上","uid":114,"minutes":379.4},{"date":20260228,"dateFmt":"2026-02-28","customer":"kittenChat测试","uid":8,"minutes":9.4},{"date":20260228,"dateFmt":"2026-02-28","customer":"kittenChat线上","uid":612,"minutes":23382.3},{"date":20260228,"dateFmt":"2026-02-28","customer":"字节微科测试","uid":1,"minutes":1.7},{"date":20260228,"dateFmt":"2026-02-28","customer":"成都煜展测试","uid":3,"minutes":0.0},{"date":20260228,"dateFmt":"2026-02-28","customer":"秒榜测试","uid":2,"minutes":0.0},{"date":20260228,"dateFmt":"2026-02-28","customer":"秒榜线上","uid":1,"minutes":0.0},{"date":20260228,"dateFmt":"2026-02-28","customer":"鲸旗测试","uid":3,"minutes":0.0},{"date":20260228,"dateFmt":"2026-02-28","customer":"鲸旗线上","uid":122,"minutes":349.7},{"date":20260301,"dateFmt":"2026-03-01","customer":"kittenChat线上","uid":590,"minutes":22698.5},{"date":20260301,"dateFmt":"2026-03-01","customer":"山东千千飞测试","uid":2,"minutes":39.6},{"date":20260301,"dateFmt":"2026-03-01","customer":"鲸旗线上","uid":87,"minutes":224.5},{"date":20260302,"dateFmt":"2026-03-02","customer":"kittenChat测试","uid":5,"minutes":7.5},{"date":20260302,"dateFmt":"2026-03-02","customer":"kittenChat线上","uid":584,"minutes":24490.3},{"date":20260302,"dateFmt":"2026-03-02","customer":"元蓬测试","uid":1,"minutes":0.0},{"date":20260302,"dateFmt":"2026-03-02","customer":"字节微科测试","uid":2,"minutes":0.5},{"date":20260302,"dateFmt":"2026-03-02","customer":"字节微科线上","uid":2,"minutes":6.3},{"date":20260302,"dateFmt":"2026-03-02","customer":"成都煜展测试","uid":1,"minutes":1.5},{"date":20260302,"dateFmt":"2026-03-02","customer":"秒榜测试","uid":1,"minutes":0.0},{"date":20260302,"dateFmt":"2026-03-02","customer":"鲸旗测试","uid":2,"minutes":0.0},{"date":20260302,"dateFmt":"2026-03-02","customer":"鲸旗线上","uid":89,"minutes":351.8},{"date":20260303,"dateFmt":"2026-03-03","customer":"Erato","uid":1,"minutes":0.0},{"date":20260303,"dateFmt":"2026-03-03","customer":"kittenChat测试","uid":1,"minutes":2.8},{"date":20260303,"dateFmt":"2026-03-03","customer":"kittenChat线上","uid":622,"minutes":25621.8},{"date":20260303,"dateFmt":"2026-03-03","customer":"元蓬测试","uid":1,"minutes":0.0},{"date":20260303,"dateFmt":"2026-03-03","customer":"字节微科测试","uid":2,"minutes":3.2},{"date":20260303,"dateFmt":"2026-03-03","customer":"字节微科线上","uid":4,"minutes":7.0},{"date":20260303,"dateFmt":"2026-03-03","customer":"山东千千飞测试","uid":2,"minutes":1.0},{"date":20260303,"dateFmt":"2026-03-03","customer":"成都煜展测试","uid":2,"minutes":0.0},{"date":20260303,"dateFmt":"2026-03-03","customer":"秒榜测试","uid":1,"minutes":0.0},{"date":20260303,"dateFmt":"2026-03-03","customer":"秒榜线上","uid":3,"minutes":0.0},{"date":20260303,"dateFmt":"2026-03-03","customer":"鲸旗测试","uid":2,"minutes":0.0},{"date":20260303,"dateFmt":"2026-03-03","customer":"鲸旗线上","uid":113,"minutes":196.0},{"date":20260304,"dateFmt":"2026-03-04","customer":"kittenChat测试","uid":3,"minutes":1.3},{"date":20260304,"dateFmt":"2026-03-04","customer":"kittenChat线上","uid":612,"minutes":28265.2},{"date":20260304,"dateFmt":"2026-03-04","customer":"元蓬测试","uid":1,"minutes":0.0},{"date":20260304,"dateFmt":"2026-03-04","customer":"字节微科测试","uid":3,"minutes":0.5},{"date":20260304,"dateFmt":"2026-03-04","customer":"字节微科线上","uid":44,"minutes":1016.2},{"date":20260304,"dateFmt":"2026-03-04","customer":"成都煜展测试","uid":2,"minutes":0.0},{"date":20260304,"dateFmt":"2026-03-04","customer":"秒榜测试","uid":1,"minutes":0.0},{"date":20260304,"dateFmt":"2026-03-04","customer":"秒榜线上","uid":4,"minutes":0.0},{"date":20260304,"dateFmt":"2026-03-04","customer":"鲸旗测试","uid":7,"minutes":51.0},{"date":20260304,"dateFmt":"2026-03-04","customer":"鲸旗线上","uid":104,"minutes":114.3},{"date":20260305,"dateFmt":"2026-03-05","customer":"kittenChat测试","uid":5,"minutes":39.0},{"date":20260305,"dateFmt":"2026-03-05","customer":"kittenChat线上","uid":647,"minutes":30679.6},{"date":20260305,"dateFmt":"2026-03-05","customer":"元蓬测试","uid":1,"minutes":0.0},{"date":20260305,"dateFmt":"2026-03-05","customer":"字节微科测试","uid":3,"minutes":1.8},{"date":20260305,"dateFmt":"2026-03-05","customer":"字节微科线上","uid":75,"minutes":3052.2},{"date":20260305,"dateFmt":"2026-03-05","customer":"成都煜展测试","uid":2,"minutes":15.2},{"date":20260305,"dateFmt":"2026-03-05","customer":"秒榜测试","uid":5,"minutes":0.0},{"date":20260305,"dateFmt":"2026-03-05","customer":"秒榜线上","uid":6,"minutes":0.0},{"date":20260305,"dateFmt":"2026-03-05","customer":"鲸旗测试","uid":11,"minutes":80.5},{"date":20260305,"dateFmt":"2026-03-05","customer":"鲸旗线上","uid":126,"minutes":1160.3},{"date":20260306,"dateFmt":"2026-03-06","customer":"Erato","uid":1,"minutes":1.9},{"date":20260306,"dateFmt":"2026-03-06","customer":"kittenChat测试","uid":3,"minutes":11.3},{"date":20260306,"dateFmt":"2026-03-06","customer":"kittenChat线上","uid":642,"minutes":28604.9},{"date":20260306,"dateFmt":"2026-03-06","customer":"字节微科线上","uid":116,"minutes":5271.0},{"date":20260306,"dateFmt":"2026-03-06","customer":"山东千千飞测试","uid":4,"minutes":89.7},{"date":20260306,"dateFmt":"2026-03-06","customer":"成都煜展测试","uid":4,"minutes":3.0},{"date":20260306,"dateFmt":"2026-03-06","customer":"秒榜测试","uid":3,"minutes":0.0},{"date":20260306,"dateFmt":"2026-03-06","customer":"秒榜线上","uid":7,"minutes":0.0},{"date":20260306,"dateFmt":"2026-03-06","customer":"鲸旗测试","uid":13,"minutes":129.2},{"date":20260306,"dateFmt":"2026-03-06","customer":"鲸旗线上","uid":114,"minutes":846.3},{"date":20260307,"dateFmt":"2026-03-07","customer":"kittenChat线上","uid":632,"minutes":26909.7},{"date":20260307,"dateFmt":"2026-03-07","customer":"字节微科线上","uid":128,"minutes":5688.4},{"date":20260307,"dateFmt":"2026-03-07","customer":"成都煜展测试","uid":1,"minutes":0.0},{"date":20260307,"dateFmt":"2026-03-07","customer":"秒榜线上","uid":9,"minutes":0.0},{"date":20260307,"dateFmt":"2026-03-07","customer":"鲸旗线上","uid":118,"minutes":650.2},{"date":20260308,"dateFmt":"2026-03-08","customer":"kittenChat线上","uid":607,"minutes":26006.9},{"date":20260308,"dateFmt":"2026-03-08","customer":"字节微科线上","uid":154,"minutes":6657.7},{"date":20260308,"dateFmt":"2026-03-08","customer":"山东千千飞测试","uid":2,"minutes":2.9},{"date":20260308,"dateFmt":"2026-03-08","customer":"核桃线上","uid":543,"minutes":17883.2},{"date":20260308,"dateFmt":"2026-03-08","customer":"秒榜线上","uid":5,"minutes":0.0},{"date":20260308,"dateFmt":"2026-03-08","customer":"鲸旗测试","uid":1,"minutes":0.0},{"date":20260308,"dateFmt":"2026-03-08","customer":"鲸旗线上","uid":113,"minutes":165.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"kittenChat测试","uid":3,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"kittenChat线上","uid":616,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"元蓬测试","uid":1,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"字节微科测试","uid":1,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"字节微科线上","uid":185,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"山东千千飞测试","uid":2,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"成都煜展测试","uid":2,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"核桃线上","uid":122,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"秒榜测试","uid":3,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"秒榜线上","uid":9,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"鲸旗测试","uid":10,"minutes":0.0},{"date":20260309,"dateFmt":"2026-03-09","customer":"鲸旗线上","uid":117,"minutes":0.0}],"weekly":[{"week":"Week 5","days":7,"totalUid":271,"totalMinutes":0.0,"avgUid":38.7,"avgMinutes":0.0},{"week":"Week 6","days":7,"totalUid":1529,"totalMinutes":0.0,"avgUid":218.4,"avgMinutes":0.0},{"week":"Week 7","days":7,"totalUid":1526,"totalMinutes":5787.0,"avgUid":218.0,"avgMinutes":826.7},{"week":"Week 8","days":7,"totalUid":1340,"totalMinutes":5260.3,"avgUid":191.4,"avgMinutes":751.5},{"week":"Week 9","days":7,"totalUid":3040,"totalMinutes":76665.8,"avgUid":434.3,"avgMinutes":10952.3},{"week":"Week 10","days":7,"totalUid":6323,"totalMinutes":234088.0,"avgUid":903.3,"avgMinutes":33441.2},{"week":"Week 11","days":1,"totalUid":1071,"totalMinutes":0.0,"avgUid":1071.0,"avgMinutes":0.0}],"customers":["Erato","kittenChat测试","kittenChat线上","元蓬测试","字节微科测试","字节微科线上","山东千千飞测试","成都煜展测试","成都煜展线上","核桃线上","秒榜测试","秒榜测试2","秒榜线上","鲸旗测试","鲸旗线上"]};
+// ==================== END DATA ====================
+
+const COLORS=['#6c8cff','#fbbf24','#34d399','#f87171','#a78bfa','#38bdf8','#fb923c','#f472b6','#22d3ee','#a3e635'];
+const isOnline=c=>c.endsWith('线上');
+const isTest=c=>!isOnline(c);
+function fmt(n){if(n>=10000)return(n/10000).toFixed(1)+'万';return n.toLocaleString('zh-CN')}
+function fmtPct(n){return(n>=0?'+':'')+n.toFixed(1)+'%'}
+
+// ========== Multi-select Component ==========
+let selectedCustomers=new Set(RAW.customers);
+const msEl=document.getElementById('customerMultiSelect');
+const msTrigger=document.getElementById('msTrigger');
+const msDropdown=document.getElementById('msDropdown');
+const msLabel=document.getElementById('msLabel');
+const msSearch=document.getElementById('msSearch');
+const msOptions=document.getElementById('msOptions');
+
+function renderMsOptions(filter=''){
+  msOptions.innerHTML='';
+  const custs=RAW.customers.filter(c=>c.toLowerCase().includes(filter.toLowerCase()));
+  custs.forEach(c=>{
+    const div=document.createElement('div');
+    div.className='ms-option';
+    div.innerHTML=`<input type="checkbox" ${selectedCustomers.has(c)?'checked':''} data-cust="${c}"><span>${c}</span>`;
+    div.querySelector('input').addEventListener('change',e=>{
+      if(e.target.checked)selectedCustomers.add(c);else selectedCustomers.delete(c);
+      updateMsLabel();render();
+    });
+    div.addEventListener('click',e=>{if(e.target.tagName!=='INPUT'){const cb=div.querySelector('input');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'))}});
+    msOptions.appendChild(div);
+  });
+}
+function updateMsLabel(){
+  if(selectedCustomers.size===RAW.customers.length){msLabel.innerHTML='全部客户';return}
+  if(selectedCustomers.size===0){msLabel.innerHTML='<span style="color:var(--text3)">请选择客户</span>';return}
+  const arr=[...selectedCustomers];
+  if(arr.length<=2){msLabel.innerHTML=arr.map(c=>`<span class="ms-tag">${c}</span>`).join('');return}
+  msLabel.innerHTML=`<span class="ms-tag">${arr[0]}</span><span style="color:var(--text3);font-size:12px">+${arr.length-1}</span>`;
+}
+msTrigger.addEventListener('click',()=>{msEl.classList.toggle('open')});
+document.addEventListener('click',e=>{if(!msEl.contains(e.target))msEl.classList.remove('open')});
+msSearch.addEventListener('input',()=>renderMsOptions(msSearch.value));
+document.getElementById('msSelectAll').addEventListener('click',()=>{selectedCustomers=new Set(RAW.customers);renderMsOptions(msSearch.value);updateMsLabel();render()});
+document.getElementById('msClearAll').addEventListener('click',()=>{selectedCustomers.clear();renderMsOptions(msSearch.value);updateMsLabel();render()});
+document.getElementById('msOnlyOnline').addEventListener('click',()=>{selectedCustomers=new Set(RAW.customers.filter(isOnline));renderMsOptions(msSearch.value);updateMsLabel();render()});
+renderMsOptions();
+
+// ========== Data Filtering ==========
+function getWeekForDate(date){
+  for(const w of RAW.weekly){
+    const wDates=RAW.customerDaily.filter(d=>RAW.customerDaily.some(dd=>dd.date===d.date)).map(d=>d.date);
+  }
+  const weekDateMap={};
+  RAW.customerDaily.forEach(d=>{});
+  return null;
+}
+// Build a date->week mapping from RAW data
+const DATE_WEEK_MAP=(()=>{
+  const m={};
+  RAW.weekly.forEach(w=>{
+    const allDates=[...new Set(RAW.customerDaily.map(d=>d.date))].sort();
+    // We know weekly data is consecutive, assign by order
+  });
+  // Better approach: use RAW.daily which has dates in order, assign weeks by 7-day blocks matching RAW.weekly
+  const allDates=[...new Set(RAW.daily.map(d=>d.date))].sort();
+  let wi=0;
+  for(let i=0;i<allDates.length&&wi<RAW.weekly.length;){
+    const w=RAW.weekly[wi];
+    for(let j=0;j<w.days&&i<allDates.length;j++,i++){
+      m[allDates[i]]=w.week;
+    }
+    wi++;
+  }
+  return m;
+})();
+
+function filterData(){
+  const range=document.getElementById('dateRange').value;
+  const type=document.getElementById('customerType').value;
+  let cd=[...RAW.customerDaily];
+  if(type==='online')cd=cd.filter(d=>isOnline(d.customer));
+  else if(type==='test')cd=cd.filter(d=>isTest(d.customer));
+  cd=cd.filter(d=>selectedCustomers.has(d.customer));
+  const agg={};
+  cd.forEach(d=>{if(!agg[d.date])agg[d.date]={date:d.date,dateFmt:d.dateFmt,uid:0,minutes:0};agg[d.date].uid+=d.uid;agg[d.date].minutes+=d.minutes});
+  let daily=Object.values(agg).sort((a,b)=>a.date-b.date);
+  if(range!=='all'){const n=parseInt(range);daily=daily.slice(-n);const minD=daily.length?daily[0].date:0;cd=cd.filter(d=>d.date>=minD)}
+
+  // Compute weekly from filtered daily
+  const weekAgg={};
+  daily.forEach(d=>{
+    const wk=DATE_WEEK_MAP[d.date];
+    if(!wk)return;
+    if(!weekAgg[wk])weekAgg[wk]={week:wk,days:0,totalUid:0,totalMinutes:0};
+    weekAgg[wk].days++;
+    weekAgg[wk].totalUid+=d.uid;
+    weekAgg[wk].totalMinutes+=d.minutes;
+  });
+  const weekOrder=RAW.weekly.map(w=>w.week);
+  const weekly=Object.values(weekAgg).sort((a,b)=>weekOrder.indexOf(a.week)-weekOrder.indexOf(b.week)).map(w=>({
+    ...w,avgUid:w.days>0?w.totalUid/w.days:0,avgMinutes:w.days>0?w.totalMinutes/w.days:0
+  }));
+
+  return{daily,custDaily:cd,weekly};
+}
+
+// ========== Header Meta ==========
+function renderHeaderMeta(daily){
+  const el=document.getElementById('headerMeta');
+  if(!daily.length){el.innerHTML='';return}
+  const last=daily[daily.length-1];
+  const lastWeek=RAW.weekly[RAW.weekly.length-1];
+  const today=new Date();
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  el.innerHTML=`
+    <div class="meta-item"><span class="meta-dot live"></span><span class="meta-label">当前日期</span><span class="meta-value">${todayStr}</span></div>
+    <div class="meta-item"><span class="meta-dot data"></span><span class="meta-label">最新数据</span><span class="meta-value">${last.dateFmt}</span></div>
+    <div class="meta-item"><span class="meta-dot data"></span><span class="meta-label">所处周期</span><span class="meta-value">${lastWeek?lastWeek.week:'-'}（已有 ${lastWeek?lastWeek.days:0} 天数据）</span></div>
+  `;
+}
+
+// ========== Insights ==========
+function renderInsights(daily,custDaily,weekly){
+  const box=document.getElementById('insightItems');box.innerHTML='';
+  if(daily.length<2)return;
+  const last=daily[daily.length-1],prev=daily[daily.length-2];
+  const uidDiff=last.uid-prev.uid;
+  const uidPct=(uidDiff/prev.uid*100);
+  const items=[];
+
+  items.push({cls:uidPct>=0?'up':'down', text:`<b>${last.dateFmt}</b> 去重主播数 <b>${fmt(last.uid)}</b>，较前日（${prev.dateFmt}）${uidPct>=0?'增长':'下降'} <b>${Math.abs(uidPct).toFixed(1)}%</b>（${uidPct>=0?'+':''}${uidDiff}）`});
+
+  // Attribution: which customers drove the change
+  const dates=[...new Set(custDaily.map(d=>d.date))].sort();
+  const lastD=dates[dates.length-1],prevD=dates.length>1?dates[dates.length-2]:null;
+  if(prevD){
+    const lastMap={},prevMap={};
+    custDaily.filter(d=>d.date===lastD).forEach(d=>{lastMap[d.customer]=d.uid});
+    custDaily.filter(d=>d.date===prevD).forEach(d=>{prevMap[d.customer]=d.uid});
+    const allCusts=new Set([...Object.keys(lastMap),...Object.keys(prevMap)]);
+    const diffs=[];
+    allCusts.forEach(c=>{
+      const cur=lastMap[c]||0,pre=prevMap[c]||0;
+      if(cur!==pre)diffs.push({customer:c,cur,pre,diff:cur-pre});
+    });
+    diffs.sort((a,b)=>a.diff-b.diff);
+
+    if(uidDiff<0){
+      const drops=diffs.filter(d=>d.diff<0).slice(0,3);
+      if(drops.length>0){
+        const detail=drops.map(d=>`<b>${d.customer}</b> ${d.pre}→${d.cur}（${d.diff}）`).join('；');
+        items.push({cls:'down', text:`主播数下降主因：${detail}`});
+      }
+      const rises=diffs.filter(d=>d.diff>0).sort((a,b)=>b.diff-a.diff).slice(0,2);
+      if(rises.length>0){
+        const detail=rises.map(d=>`<b>${d.customer}</b> ${d.pre}→${d.cur}（+${d.diff}）`).join('；');
+        items.push({cls:'up', text:`同期增长客户：${detail}`});
+      }
+    }else if(uidDiff>0){
+      const rises=diffs.filter(d=>d.diff>0).sort((a,b)=>b.diff-a.diff).slice(0,3);
+      if(rises.length>0){
+        const detail=rises.map(d=>`<b>${d.customer}</b> ${d.pre}→${d.cur}（+${d.diff}）`).join('；');
+        items.push({cls:'up', text:`主播数增长主因：${detail}`});
+      }
+    }
+
+    // New customers that appeared today
+    const newCusts=Object.keys(lastMap).filter(c=>!(c in prevMap)&&lastMap[c]>0);
+    if(newCusts.length>0){
+      items.push({cls:'info', text:`${last.dateFmt} 新增客户：${newCusts.map(c=>`<b>${c}</b>(${lastMap[c]})`).join('、')}`});
+    }
+    // Customers that disappeared
+    const goneOnline=Object.keys(prevMap).filter(c=>!(c in lastMap)&&isOnline(c)&&prevMap[c]>0);
+    if(goneOnline.length>0){
+      items.push({cls:'down', text:`${last.dateFmt} 无数据的线上客户（前日有）：${goneOnline.map(c=>`<b>${c}</b>(前日${prevMap[c]})`).join('、')}`});
+    }
+  }
+
+  if(last.minutes>0&&prev.minutes>0){
+    const minPct=((last.minutes-prev.minutes)/prev.minutes*100);
+    items.push({cls:minPct>=0?'up':'down', text:`视频分钟数 <b>${fmt(Math.round(last.minutes))}</b>，较前日（${prev.dateFmt}）${minPct>=0?'增长':'下降'} <b>${Math.abs(minPct).toFixed(1)}%</b>`});
+  }
+
+  const wkFull=weekly.filter(w=>w.days>=3);
+  if(wkFull.length>=2){
+    const cw=wkFull[wkFull.length-1],pw=wkFull[wkFull.length-2];
+    const wPct=((cw.avgUid-pw.avgUid)/pw.avgUid*100);
+    items.push({cls:wPct>=0?'up':'down', text:`${cw.week} 日均主播数 <b>${fmt(Math.round(cw.avgUid))}</b>，较 ${pw.week} ${wPct>=0?'增长':'下降'} <b>${Math.abs(wPct).toFixed(1)}%</b>`});
+  }
+
+  if(dates.length>0){
+    const onlineLast=custDaily.filter(d=>d.date===lastD&&isOnline(d.customer)&&d.uid>0).sort((a,b)=>b.uid-a.uid);
+    if(onlineLast.length>0){
+      const lastFmt=daily[daily.length-1].dateFmt;
+      const top3=onlineLast.slice(0,3).map(d=>`${d.customer}(${fmt(d.uid)})`).join('、');
+      items.push({cls:'info', text:`${lastFmt} 线上客户主播数 TOP3：${top3}`});
+    }
+  }
+
+  items.forEach(it=>{
+    const div=document.createElement('div');div.className='insight-item';
+    div.innerHTML=`<span class="insight-dot ${it.cls}"></span><span>${it.text}</span>`;
+    box.appendChild(div);
+  });
+}
+
+// ========== Cards ==========
+function renderCards(daily,custDaily,weekly){
+  const last=daily[daily.length-1],prev=daily.length>1?daily[daily.length-2]:null;
+  animateValue('cardUid',0,last?last.uid:0,800);
+  animateValue('cardMin',0,last?Math.round(last.minutes):0,800);
+  if(last&&prev){
+    setChange('cardUidChange',(last.uid-prev.uid)/prev.uid*100);
+    document.getElementById('cardUidSub').textContent=`前一日 ${prev.dateFmt}：${fmt(prev.uid)}`;
+    if(prev.minutes>0){setChange('cardMinChange',(last.minutes-prev.minutes)/prev.minutes*100);document.getElementById('cardMinSub').textContent=`前一日 ${prev.dateFmt}：${fmt(Math.round(prev.minutes))}`}
+    else{document.getElementById('cardMinChange').textContent='';document.getElementById('cardMinSub').textContent=`前一日 ${prev.dateFmt}：${fmt(Math.round(prev.minutes))}`}
+  }
+
+  if(weekly.length>=1){
+    const cw=weekly[weekly.length-1],pw=weekly.length>=2?weekly[weekly.length-2]:null;
+    animateValue('cardWeekUid',0,Math.round(cw.avgUid),800);
+    if(pw&&pw.avgUid>0){setChange('cardWeekUidChange',(cw.avgUid-pw.avgUid)/pw.avgUid*100)}
+    else{document.getElementById('cardWeekUidChange').textContent='';document.getElementById('cardWeekUidChange').className='card-change'}
+    document.getElementById('cardWeekUidSub').textContent=`${cw.week}（${cw.days}天）`;
+  }
+
+  const dates=[...new Set(custDaily.map(d=>d.date))].sort();
+  const lastD=dates[dates.length-1]||0, prevD=dates[dates.length-2]||0;
+  const curOnline=new Set(custDaily.filter(d=>d.date===lastD&&isOnline(d.customer)&&d.uid>0).map(d=>d.customer));
+  const prevOnline=new Set(custDaily.filter(d=>d.date===prevD&&isOnline(d.customer)&&d.uid>0).map(d=>d.customer));
+  animateValue('cardCustCount',0,curOnline.size,600);
+  const diff=curOnline.size-prevOnline.size;
+  if(diff!==0)setChange('cardCustChange',diff/prevOnline.size*100);
+  else{document.getElementById('cardCustChange').textContent='持平';document.getElementById('cardCustChange').className='card-change'}
+  document.getElementById('cardCustSub').textContent=`最新日 ${last?last.dateFmt:''}`;
+}
+
+function animateValue(id,start,end,dur){
+  const el=document.getElementById(id);
+  if(!el||end===0){el.textContent=fmt(end);return}
+  const range=end-start;let startTime=null;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    const p=Math.min((ts-startTime)/dur,1);
+    const eased=1-Math.pow(1-p,3);
+    el.textContent=fmt(Math.round(start+range*eased));
+    if(p<1)requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function setChange(id,pct){
+  const el=document.getElementById(id);
+  el.textContent=`${pct>=0?'↑':'↓'} ${fmtPct(pct)}`;
+  el.className='card-change '+(pct>=0?'up':'down');
+}
+
+// ========== Charts ==========
+let cUid,cMin,cWeek,cCust;
+const darkTheme={backgroundColor:'transparent',textStyle:{color:'#9ca3af'},legend:{textStyle:{color:'#9ca3af'}},tooltip:{backgroundColor:'rgba(30,34,51,0.95)',borderColor:'#2a2f42',textStyle:{color:'#e8eaed'}}};
+
+function renderDailyCharts(daily){
+  const dates=daily.map(d=>d.dateFmt),uids=daily.map(d=>d.uid),mins=daily.map(d=>Math.round(d.minutes));
+  const base={...darkTheme,tooltip:{...darkTheme.tooltip,trigger:'axis'},grid:{left:60,right:20,top:40,bottom:50},xAxis:{type:'category',data:dates,axisLabel:{rotate:45,fontSize:11,color:'#6b7280'},axisLine:{lineStyle:{color:'#2a2f42'}},splitLine:{show:false}}};
+
+  if(!cUid)cUid=echarts.init(document.getElementById('chartUid'));
+  cUid.setOption({...base,yAxis:{type:'value',name:'主播数',nameTextStyle:{color:'#6b7280'},axisLabel:{color:'#6b7280'},splitLine:{lineStyle:{color:'#1e2233'}},axisLine:{show:false}},
+    series:[{data:uids,type:'line',smooth:.4,symbol:'circle',symbolSize:4,lineStyle:{width:2.5,color:'#6c8cff'},itemStyle:{color:'#6c8cff'},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(108,140,255,0.2)'},{offset:1,color:'rgba(108,140,255,0)'}])},
+      animationDuration:1200,animationEasing:'cubicOut'}]},true);
+
+  if(!cMin)cMin=echarts.init(document.getElementById('chartMin'));
+  cMin.setOption({...base,yAxis:{type:'value',name:'分钟数',nameTextStyle:{color:'#6b7280'},axisLabel:{color:'#6b7280',formatter:v=>v>=10000?(v/10000).toFixed(1)+'万':v},splitLine:{lineStyle:{color:'#1e2233'}},axisLine:{show:false}},
+    series:[{data:mins,type:'line',smooth:.4,symbol:'circle',symbolSize:4,lineStyle:{width:2.5,color:'#fbbf24'},itemStyle:{color:'#fbbf24'},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(251,191,36,0.2)'},{offset:1,color:'rgba(251,191,36,0)'}])},
+      animationDuration:1200,animationEasing:'cubicOut'}]},true);
+}
+
+function renderWeekly(data){
+  if(!cWeek)cWeek=echarts.init(document.getElementById('chartWeekly'));
+  cWeek.setOption({...darkTheme,tooltip:{...darkTheme.tooltip,trigger:'axis'},legend:{data:['日均主播数','日均分钟数'],bottom:0,textStyle:{color:'#9ca3af'}},
+    grid:{left:60,right:70,top:30,bottom:45},
+    xAxis:{type:'category',data:data.map(d=>d.week),axisLabel:{color:'#6b7280'},axisLine:{lineStyle:{color:'#2a2f42'}}},
+    yAxis:[{type:'value',name:'主播数',nameTextStyle:{color:'#6b7280'},axisLabel:{color:'#6b7280'},splitLine:{lineStyle:{color:'#1e2233'}},axisLine:{show:false}},
+      {type:'value',name:'分钟数',nameTextStyle:{color:'#6b7280'},position:'right',axisLabel:{color:'#6b7280',formatter:v=>v>=10000?(v/10000).toFixed(1)+'万':v},splitLine:{show:false},axisLine:{show:false}}],
+    series:[
+      {name:'日均主播数',data:data.map(d=>Math.round(d.avgUid)),type:'bar',barWidth:28,itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#6c8cff'},{offset:1,color:'rgba(108,140,255,0.3)'}]),borderRadius:[6,6,0,0]},yAxisIndex:0,animationDuration:1000},
+      {name:'日均分钟数',data:data.map(d=>Math.round(d.avgMinutes)),type:'bar',barWidth:28,itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#fbbf24'},{offset:1,color:'rgba(251,191,36,0.3)'}]),borderRadius:[6,6,0,0]},yAxisIndex:1,animationDuration:1000}
+    ]},true);
+
+  const tbody=document.querySelector('#weeklyTable tbody');tbody.innerHTML='';
+  data.forEach((w,i)=>{
+    const p=i>0?data[i-1]:null;
+    const uPct=p&&p.avgUid>0?((w.avgUid-p.avgUid)/p.avgUid*100):null;
+    const mPct=p&&p.avgMinutes>0?((w.avgMinutes-p.avgMinutes)/p.avgMinutes*100):null;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${w.week}</td><td class="text-right">${w.days}</td><td class="text-right">${fmt(Math.round(w.avgUid))}</td><td class="text-right ${uPct!==null?(uPct>=0?'tag-up':'tag-down'):''}">${uPct!==null?fmtPct(uPct):'-'}</td><td class="text-right">${fmt(Math.round(w.avgMinutes))}</td><td class="text-right ${mPct!==null?(mPct>=0?'tag-up':'tag-down'):''}">${mPct!==null?fmtPct(mPct):'-'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderCustTrend(custDaily){
+  const dates=[...new Set(custDaily.map(d=>d.dateFmt))].sort();
+  const onlineCusts=[...new Set(custDaily.filter(d=>isOnline(d.customer)).map(d=>d.customer))];
+  const totals={};onlineCusts.forEach(c=>{totals[c]=0});
+  custDaily.filter(d=>isOnline(d.customer)).forEach(d=>{totals[d.customer]=(totals[d.customer]||0)+d.uid});
+  const top5=Object.entries(totals).sort((a,b)=>b[1]-a[1]).slice(0,5).map(e=>e[0]);
+  const series=top5.map((c,i)=>{
+    const m={};custDaily.filter(d=>d.customer===c).forEach(d=>{m[d.dateFmt]=d.uid});
+    return{name:c,type:'line',smooth:.3,symbol:'circle',symbolSize:4,lineStyle:{width:2},itemStyle:{color:COLORS[i%COLORS.length]},data:dates.map(dt=>m[dt]||0),animationDuration:1500,animationDelay:i*200}
+  });
+  if(!cCust)cCust=echarts.init(document.getElementById('chartCustTrend'));
+  cCust.setOption({...darkTheme,tooltip:{...darkTheme.tooltip,trigger:'axis'},legend:{data:top5,bottom:0,type:'scroll',textStyle:{color:'#9ca3af'}},
+    grid:{left:60,right:20,top:30,bottom:55},
+    xAxis:{type:'category',data:dates,axisLabel:{rotate:45,fontSize:11,color:'#6b7280'},axisLine:{lineStyle:{color:'#2a2f42'}}},
+    yAxis:{type:'value',name:'去重主播数',nameTextStyle:{color:'#6b7280'},axisLabel:{color:'#6b7280'},splitLine:{lineStyle:{color:'#1e2233'}},axisLine:{show:false}},
+    series},true);
+}
+
+function renderCustTable(custDaily){
+  const dates=[...new Set(custDaily.map(d=>d.date))].sort();
+  if(!dates.length)return;
+  const lastD=dates[dates.length-1],prevD=dates.length>1?dates[dates.length-2]:null;
+  const lastM={},prevM={};
+  custDaily.filter(d=>d.date===lastD).forEach(d=>{lastM[d.customer]=d});
+  if(prevD)custDaily.filter(d=>d.date===prevD).forEach(d=>{prevM[d.customer]=d});
+  const rows=Object.entries(lastM).map(([c,d])=>{
+    const p=prevM[c];
+    return{customer:c,uid:d.uid,minutes:d.minutes,uidPct:p&&p.uid>0?((d.uid-p.uid)/p.uid*100):null,minPct:p&&p.minutes>0?((d.minutes-p.minutes)/p.minutes*100):null,isNew:!p}
+  }).sort((a,b)=>b.uid-a.uid);
+  const tbody=document.querySelector('#custTable tbody');
+  function draw(){
+    tbody.innerHTML='';
+    rows.forEach(r=>{const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${r.customer}</td><td class="text-right">${fmt(r.uid)}</td><td class="text-right">${fmt(Math.round(r.minutes))}</td><td class="text-right ${r.isNew?'tag-new':(r.uidPct!==null?(r.uidPct>=0?'tag-up':'tag-down'):'')}">${r.isNew?'新增':(r.uidPct!==null?fmtPct(r.uidPct):'-')}</td><td class="text-right ${r.isNew?'tag-new':(r.minPct!==null?(r.minPct>=0?'tag-up':'tag-down'):'')}">${r.isNew?'新增':(r.minPct!==null?fmtPct(r.minPct):'-')}</td>`;
+      tbody.appendChild(tr)});
+  }
+  draw();
+  document.querySelectorAll('#custTable thead th').forEach(th=>{
+    th.onclick=()=>{const k=th.dataset.sort;if(!k)return;const dir=th._sd==='asc'?'desc':'asc';th._sd=dir;
+      rows.sort((a,b)=>{let va=a[k],vb=b[k];if(va===null)va=-Infinity;if(vb===null)vb=-Infinity;if(typeof va==='string')return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);return dir==='asc'?va-vb:vb-va});draw()}
+  });
+}
+
+// ========== OS Data & Charts ==========
+const OS_DATA={"osDaily":[{"date":20260209,"dateFmt":"2026-02-09","os":"Android","uid":344,"minutes":3588.3},{"date":20260209,"dateFmt":"2026-02-09","os":"Windows","uid":20,"minutes":1319.8},{"date":20260209,"dateFmt":"2026-02-09","os":"iOS","uid":31,"minutes":933.3},{"date":20260210,"dateFmt":"2026-02-10","os":"Android","uid":298,"minutes":3540.0},{"date":20260210,"dateFmt":"2026-02-10","os":"Windows","uid":16,"minutes":633.8},{"date":20260210,"dateFmt":"2026-02-10","os":"iOS","uid":19,"minutes":663.5},{"date":20260211,"dateFmt":"2026-02-11","os":"Android","uid":272,"minutes":3269.6},{"date":20260211,"dateFmt":"2026-02-11","os":"Windows","uid":22,"minutes":764.1},{"date":20260211,"dateFmt":"2026-02-11","os":"iOS","uid":20,"minutes":821.1},{"date":20260212,"dateFmt":"2026-02-12","os":"Android","uid":311,"minutes":4258.1},{"date":20260212,"dateFmt":"2026-02-12","os":"Windows","uid":34,"minutes":1051.2},{"date":20260212,"dateFmt":"2026-02-12","os":"iOS","uid":34,"minutes":1115.7},{"date":20260213,"dateFmt":"2026-02-13","os":"Android","uid":369,"minutes":4431.5},{"date":20260213,"dateFmt":"2026-02-13","os":"Windows","uid":21,"minutes":486.3},{"date":20260213,"dateFmt":"2026-02-13","os":"iOS","uid":56,"minutes":1102.2},{"date":20260214,"dateFmt":"2026-02-14","os":"Android","uid":396,"minutes":4548.9},{"date":20260214,"dateFmt":"2026-02-14","os":"Windows","uid":25,"minutes":710.8},{"date":20260214,"dateFmt":"2026-02-14","os":"iOS","uid":55,"minutes":1095.7},{"date":20260215,"dateFmt":"2026-02-15","os":"Android","uid":233,"minutes":1491.3},{"date":20260215,"dateFmt":"2026-02-15","os":"Windows","uid":4,"minutes":65.9},{"date":20260215,"dateFmt":"2026-02-15","os":"iOS","uid":15,"minutes":227.9},{"date":20260216,"dateFmt":"2026-02-16","os":"Android","uid":220,"minutes":692.6},{"date":20260217,"dateFmt":"2026-02-17","os":"Android","uid":211,"minutes":1445.7},{"date":20260218,"dateFmt":"2026-02-18","os":"Android","uid":179,"minutes":866.7},{"date":20260219,"dateFmt":"2026-02-19","os":"Android","uid":206,"minutes":739.8},{"date":20260220,"dateFmt":"2026-02-20","os":"Android","uid":167,"minutes":336.7},{"date":20260221,"dateFmt":"2026-02-21","os":"Android","uid":188,"minutes":700.1},{"date":20260222,"dateFmt":"2026-02-22","os":"Android","uid":174,"minutes":595.8},{"date":20260223,"dateFmt":"2026-02-23","os":"Android","uid":197,"minutes":1895.3},{"date":20260223,"dateFmt":"2026-02-23","os":"iOS","uid":7,"minutes":323.3},{"date":20260224,"dateFmt":"2026-02-24","os":"Android","uid":252,"minutes":2516.8},{"date":20260224,"dateFmt":"2026-02-24","os":"Windows","uid":3,"minutes":152.1},{"date":20260224,"dateFmt":"2026-02-24","os":"iOS","uid":16,"minutes":449.2},{"date":20260225,"dateFmt":"2026-02-25","os":"Android","uid":322,"minutes":5389.0},{"date":20260225,"dateFmt":"2026-02-25","os":"Windows","uid":4,"minutes":176.6},{"date":20260225,"dateFmt":"2026-02-25","os":"iOS","uid":38,"minutes":1140.9},{"date":20260226,"dateFmt":"2026-02-26","os":"Android","uid":425,"minutes":7453.0},{"date":20260226,"dateFmt":"2026-02-26","os":"Windows","uid":10,"minutes":218.3},{"date":20260226,"dateFmt":"2026-02-26","os":"iOS","uid":28,"minutes":797.3},{"date":20260227,"dateFmt":"2026-02-27","os":"Android","uid":946,"minutes":25345.7},{"date":20260227,"dateFmt":"2026-02-27","os":"Windows","uid":15,"minutes":234.9},{"date":20260227,"dateFmt":"2026-02-27","os":"iOS","uid":61,"minutes":1032.9},{"date":20260228,"dateFmt":"2026-02-28","os":"Android","uid":2080,"minutes":69735.8},{"date":20260228,"dateFmt":"2026-02-28","os":"Windows","uid":23,"minutes":642.5},{"date":20260228,"dateFmt":"2026-02-28","os":"iOS","uid":380,"minutes":12751.3},{"date":20260301,"dateFmt":"2026-03-01","os":"Android","uid":911,"minutes":29085.6},{"date":20260301,"dateFmt":"2026-03-01","os":"Windows","uid":19,"minutes":582.8},{"date":20260301,"dateFmt":"2026-03-01","os":"iOS","uid":77,"minutes":2152.2},{"date":20260302,"dateFmt":"2026-03-02","os":"Android","uid":777,"minutes":27025.1},{"date":20260302,"dateFmt":"2026-03-02","os":"Windows","uid":3,"minutes":92.1},{"date":20260302,"dateFmt":"2026-03-02","os":"iOS","uid":25,"minutes":657.9},{"date":20260303,"dateFmt":"2026-03-03","os":"Android","uid":777,"minutes":26836.5},{"date":20260303,"dateFmt":"2026-03-03","os":"Windows","uid":7,"minutes":329.2},{"date":20260303,"dateFmt":"2026-03-03","os":"iOS","uid":9,"minutes":236.0},{"date":20260304,"dateFmt":"2026-03-04","os":"Android","uid":852,"minutes":31948.2},{"date":20260304,"dateFmt":"2026-03-04","os":"Windows","uid":5,"minutes":221.2},{"date":20260304,"dateFmt":"2026-03-04","os":"iOS","uid":19,"minutes":500.0},{"date":20260305,"dateFmt":"2026-03-05","os":"Android","uid":930,"minutes":36047.0},{"date":20260305,"dateFmt":"2026-03-05","os":"Windows","uid":18,"minutes":361.3},{"date":20260305,"dateFmt":"2026-03-05","os":"iOS","uid":21,"minutes":419.0},{"date":20260306,"dateFmt":"2026-03-06","os":"Android","uid":1052,"minutes":38032.7},{"date":20260306,"dateFmt":"2026-03-06","os":"Windows","uid":6,"minutes":153.9},{"date":20260306,"dateFmt":"2026-03-06","os":"iOS","uid":47,"minutes":806.0},{"date":20260307,"dateFmt":"2026-03-07","os":"Android","uid":2099,"minutes":72954.4},{"date":20260307,"dateFmt":"2026-03-07","os":"Windows","uid":25,"minutes":721.7},{"date":20260307,"dateFmt":"2026-03-07","os":"iOS","uid":278,"minutes":8980.9},{"date":20260308,"dateFmt":"2026-03-08","os":"Android","uid":1286,"minutes":45832.8},{"date":20260308,"dateFmt":"2026-03-08","os":"Windows","uid":20,"minutes":578.7},{"date":20260308,"dateFmt":"2026-03-08","os":"iOS","uid":128,"minutes":4304.1}],"pkgCount":[{"vid":1629106,"customer":"Erato","os":"Android","pkgCount":1},{"vid":544407,"customer":"kittenChat测试","os":"Android","pkgCount":4},{"vid":946320,"customer":"kittenChat线上","os":"Android","pkgCount":4},{"vid":1538022,"customer":"元蓬测试","os":"Android","pkgCount":1},{"vid":1019272,"customer":"声动互娱","os":"Android","pkgCount":1},{"vid":130451,"customer":"声网（内部测试账号）","os":"Android","pkgCount":5},{"vid":130451,"customer":"声网（内部测试账号）","os":"Windows","pkgCount":1},{"vid":130451,"customer":"声网（内部测试账号）","os":"iOS","pkgCount":2},{"vid":1028124,"customer":"字节微科测试","os":"Android","pkgCount":1},{"vid":1028123,"customer":"字节微科线上","os":"Android","pkgCount":1},{"vid":370277,"customer":"山东千千飞测试","os":"Android","pkgCount":2},{"vid":1293695,"customer":"成都煜展测试","os":"iOS","pkgCount":1},{"vid":1596639,"customer":"未匹配","os":"Windows","pkgCount":1},{"vid":1376771,"customer":"核桃测试","os":"Android","pkgCount":1},{"vid":1376771,"customer":"核桃测试","os":"iOS","pkgCount":1},{"vid":251734,"customer":"核桃线上","os":"Android","pkgCount":2},{"vid":251734,"customer":"核桃线上","os":"Windows","pkgCount":3},{"vid":251734,"customer":"核桃线上","os":"iOS","pkgCount":2},{"vid":1626089,"customer":"秒榜测试","os":"Android","pkgCount":1},{"vid":1664083,"customer":"秒榜线上","os":"Android","pkgCount":1},{"vid":1597112,"customer":"自然选择测试","os":"Android","pkgCount":1},{"vid":1570586,"customer":"鲸旗测试","os":"Android","pkgCount":1},{"vid":1569974,"customer":"鲸旗线上","os":"Android","pkgCount":1}]};
+
+const OS_COLORS={'Android':'#34d399','iOS':'#6c8cff','Windows':'#a78bfa'};
+let cOsUid,cOsMin,cOsPie;
+
+function renderOsCharts(){
+  const osd=OS_DATA.osDaily;
+  const dates=[...new Set(osd.map(d=>d.dateFmt))].sort();
+  const osList=['Android','iOS','Windows'];
+
+  function buildSeries(field){
+    return osList.map(os=>{
+      const m={};osd.filter(d=>d.os===os).forEach(d=>{m[d.dateFmt]=d[field]});
+      return{name:os,type:'line',stack:'os',smooth:.3,symbol:'circle',symbolSize:3,lineStyle:{width:1.5,color:OS_COLORS[os]},itemStyle:{color:OS_COLORS[os]},
+        areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:OS_COLORS[os]+'33'},{offset:1,color:OS_COLORS[os]+'05'}])},
+        data:dates.map(dt=>m[dt]||0),animationDuration:1200};
+    });
+  }
+
+  const baseOpt={...darkTheme,tooltip:{...darkTheme.tooltip,trigger:'axis'},legend:{data:osList,bottom:0,textStyle:{color:'#9ca3af'}},
+    grid:{left:60,right:20,top:30,bottom:50},
+    xAxis:{type:'category',data:dates,axisLabel:{rotate:45,fontSize:11,color:'#6b7280'},axisLine:{lineStyle:{color:'#2a2f42'}},splitLine:{show:false}}};
+
+  if(!cOsUid)cOsUid=echarts.init(document.getElementById('chartOsUid'));
+  cOsUid.setOption({...baseOpt,yAxis:{type:'value',name:'主播数',nameTextStyle:{color:'#6b7280'},axisLabel:{color:'#6b7280'},splitLine:{lineStyle:{color:'#1e2233'}},axisLine:{show:false}},series:buildSeries('uid')},true);
+
+  if(!cOsMin)cOsMin=echarts.init(document.getElementById('chartOsMin'));
+  cOsMin.setOption({...baseOpt,yAxis:{type:'value',name:'分钟数',nameTextStyle:{color:'#6b7280'},axisLabel:{color:'#6b7280',formatter:v=>v>=10000?(v/10000).toFixed(1)+'万':v},splitLine:{lineStyle:{color:'#1e2233'}},axisLine:{show:false}},series:buildSeries('minutes')},true);
+
+  // Pie for latest date
+  const latestDate=dates[dates.length-1];
+  const pieData=osList.map(os=>{
+    const row=osd.find(d=>d.dateFmt===latestDate&&d.os===os);
+    return{name:os,value:row?row.uid:0};
+  }).filter(d=>d.value>0);
+
+  if(!cOsPie)cOsPie=echarts.init(document.getElementById('chartOsPie'));
+  cOsPie.setOption({...darkTheme,
+    tooltip:{...darkTheme.tooltip,trigger:'item',formatter:p=>`${p.name}<br/>主播数: <b>${fmt(p.value)}</b> (${p.percent}%)`},
+    legend:{data:osList,bottom:0,textStyle:{color:'#9ca3af'}},
+    series:[{type:'pie',radius:['40%','70%'],center:['50%','45%'],
+      label:{color:'#9ca3af',fontSize:12,formatter:'{b}\n{d}%'},
+      labelLine:{lineStyle:{color:'#2a2f42'}},
+      data:pieData.map(d=>({...d,itemStyle:{color:OS_COLORS[d.name]}})),
+      animationType:'scale',animationDuration:1000}]
+  },true);
+}
+
+function renderPkgTable(){
+  const rows=OS_DATA.pkgCount.slice().sort((a,b)=>b.pkgCount-a.pkgCount);
+  const hasAlert=rows.some(r=>r.pkgCount>6);
+  const tbody=document.querySelector('#pkgTable tbody');
+  tbody.innerHTML='';
+  rows.forEach(r=>{
+    const alert=r.pkgCount>6;
+    const osCls=r.os==='Android'?'android':(r.os==='iOS'?'ios':'windows');
+    const tr=document.createElement('tr');
+    if(alert)tr.style.background='rgba(248,113,113,0.08)';
+    tr.innerHTML=`<td>${r.customer}</td><td>${r.vid}</td><td><span class="os-badge ${osCls}">${r.os}</span></td><td class="text-right">${alert?`<span class="pkg-alert">${r.pkgCount}</span>`:`<span class="pkg-ok">${r.pkgCount}</span>`}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+renderOsCharts();
+renderPkgTable();
+
+// ========== Render All ==========
+function render(){
+  const{daily,custDaily,weekly}=filterData();
+  renderHeaderMeta(daily);
+  renderInsights(daily,custDaily,weekly);
+  renderCards(daily,custDaily,weekly);
+  renderDailyCharts(daily);
+  renderWeekly(weekly);
+  renderCustTrend(custDaily);
+  renderCustTable(custDaily);
+}
+render();
+document.getElementById('dateRange').addEventListener('change',render);
+document.getElementById('customerType').addEventListener('change',render);
+
+// ==================== BUSINESS DATA (from Obsidian weekly reports) ====================
+const BIZ_FUNNEL=[
+  {week:'W01',total:29,online:1,integrating:0,following:23,delayed:3,paused:2},
+  {week:'W02',total:31,online:1,integrating:5,following:21,delayed:2,paused:2},
+  {week:'W03',total:32,online:1,integrating:6,following:21,delayed:2,paused:2},
+  {week:'W04',total:35,online:1,integrating:9,following:18,delayed:2,paused:3},
+  {week:'W05',total:35,online:1,integrating:9,following:18,delayed:2,paused:3},
+  {week:'W06',total:39,online:2,integrating:8,following:24,delayed:2,paused:3},
+  {week:'W07',total:41,online:3,integrating:7,following:26,delayed:2,paused:3},
+  {week:'W09',total:43,online:3,integrating:7,following:28,delayed:2,paused:3},
+  {week:'W10',total:43,online:5,integrating:4,following:25,delayed:4,paused:5},
+];
+
+const BIZ_MILESTONES=[
+  {week:'W01',type:'biz',text:'客户池启动 29 家，<b>核桃</b>已上线（贴纸需求）'},
+  {week:'W02',type:'sdk',text:'SDK <b>4.5.2.8</b> 正式版发布 + 对外材料上线'},
+  {week:'W02',type:'biz',text:'<b>成都煜展</b>（替换相芯）、<b>元蓬</b> 开始集成'},
+  {week:'W03',type:'sdk',text:'高级美颜 <b>UI 组件 PRD</b> 评审通过'},
+  {week:'W04',type:'biz',text:'客户池 35 家(+3)，<b>山东千千飞</b>、<b>Bytewake</b> 新增'},
+  {week:'W06',type:'sdk',text:'SDK <b>4.5.2.9</b> 发布 + UI 组件双端验收、发布 GitHub'},
+  {week:'W06',type:'online',text:'<b>鲸旗</b>上线 4.5.2.8，主播数增长至 233'},
+  {week:'W07',type:'online',text:'<b>kittenChat</b> 2.12 上线，开始线上验证'},
+  {week:'W09',type:'sdk',text:'<b>Flutter 正式版</b>发布（基于 4.5.2.9）'},
+  {week:'W09',type:'biz',text:'商业化<b>套餐包 PRD</b> 初稿完成'},
+  {week:'W09',type:'online',text:'kittenChat 爆发增长：日均 6-8 → <b>596</b>（2.27）'},
+  {week:'W10',type:'online',text:'已上线 <b>5 家</b>（+2），字节微科、秒榜陆续上线'},
+  {week:'W10',type:'biz',text:'日均主播数 <b>826</b>（周环比 +90.3%），kittenChat 日均 <b>621</b>'},
+  {week:'W10',type:'biz',text:'重点跟进：<b>Hellotalk</b>（4月上线）、<b>克维塔</b>（替换相芯）、<b>白兔</b>（开始集成）'},
+];
+
+// Funnel stacked area chart
+const cFunnel=echarts.init(document.getElementById('chartFunnel'));
+cFunnel.setOption({
+  ...darkTheme,
+  tooltip:{...darkTheme.tooltip,trigger:'axis',axisPointer:{type:'shadow'}},
+  legend:{data:['已上线','集成中','跟进中','延后','暂停'],bottom:0,textStyle:{color:'#9ca3af'}},
+  grid:{left:50,right:20,top:30,bottom:50},
+  xAxis:{type:'category',data:BIZ_FUNNEL.map(d=>d.week),axisLabel:{color:'#6b7280'},axisLine:{lineStyle:{color:'#2a2f42'}}},
+  yAxis:{type:'value',name:'客户数',nameTextStyle:{color:'#6b7280'},axisLabel:{color:'#6b7280'},splitLine:{lineStyle:{color:'#1e2233'}},axisLine:{show:false}},
+  series:[
+    {name:'已上线',type:'bar',stack:'total',data:BIZ_FUNNEL.map(d=>d.online),itemStyle:{color:'#34d399',borderRadius:[0,0,0,0]},barWidth:32,animationDuration:800},
+    {name:'集成中',type:'bar',stack:'total',data:BIZ_FUNNEL.map(d=>d.integrating),itemStyle:{color:'#6c8cff'},barWidth:32,animationDuration:800},
+    {name:'跟进中',type:'bar',stack:'total',data:BIZ_FUNNEL.map(d=>d.following),itemStyle:{color:'#fbbf24'},barWidth:32,animationDuration:800},
+    {name:'延后',type:'bar',stack:'total',data:BIZ_FUNNEL.map(d=>d.delayed),itemStyle:{color:'#6b7280'},barWidth:32,animationDuration:800},
+    {name:'暂停',type:'bar',stack:'total',data:BIZ_FUNNEL.map(d=>d.paused),itemStyle:{color:'#374151'},barWidth:32,animationDuration:800},
+  ]
+});
+
+// Pipeline line chart
+const cPipeline=echarts.init(document.getElementById('chartPipeline'));
+cPipeline.setOption({
+  ...darkTheme,
+  tooltip:{...darkTheme.tooltip,trigger:'axis'},
+  legend:{data:['累计客户数','已上线客户数'],bottom:0,textStyle:{color:'#9ca3af'}},
+  grid:{left:50,right:50,top:30,bottom:50},
+  xAxis:{type:'category',data:BIZ_FUNNEL.map(d=>d.week),axisLabel:{color:'#6b7280'},axisLine:{lineStyle:{color:'#2a2f42'}}},
+  yAxis:[
+    {type:'value',name:'累计客户',nameTextStyle:{color:'#6b7280'},axisLabel:{color:'#6b7280'},splitLine:{lineStyle:{color:'#1e2233'}},axisLine:{show:false}},
+    {type:'value',name:'已上线',nameTextStyle:{color:'#6b7280'},position:'right',axisLabel:{color:'#6b7280'},splitLine:{show:false},axisLine:{show:false},min:0}
+  ],
+  series:[
+    {name:'累计客户数',type:'line',data:BIZ_FUNNEL.map(d=>d.total),smooth:.3,symbol:'circle',symbolSize:6,lineStyle:{width:2.5,color:'#a78bfa'},itemStyle:{color:'#a78bfa'},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(167,139,250,0.15)'},{offset:1,color:'rgba(167,139,250,0)'}])},
+      yAxisIndex:0,animationDuration:1200},
+    {name:'已上线客户数',type:'bar',data:BIZ_FUNNEL.map(d=>d.online),barWidth:24,
+      itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#34d399'},{offset:1,color:'rgba(52,211,153,0.3)'}]),borderRadius:[6,6,0,0]},
+      yAxisIndex:1,animationDuration:1000}
+  ]
+});
+
+// Timeline
+const tlEl=document.getElementById('timeline');
+BIZ_MILESTONES.forEach(m=>{
+  const tagMap={sdk:'SDK/产品',online:'客户上线',biz:'商业进展'};
+  const tagCls=m.type;
+  const div=document.createElement('div');
+  div.className='tl-item '+(m.type==='online'?'launch':m.type==='sdk'?'milestone':'');
+  div.innerHTML=`<div class="tl-week">${m.week}<span class="tl-tag ${tagCls}">${tagMap[m.type]}</span></div><div class="tl-text">${m.text}</div>`;
+  tlEl.appendChild(div);
+});
+
+window.addEventListener('resize',()=>{[cUid,cMin,cWeek,cCust,cOsUid,cOsMin,cOsPie,cFunnel,cPipeline].forEach(c=>c&&c.resize())});
+</script>
+</body>
+</html>
