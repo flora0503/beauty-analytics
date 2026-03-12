@@ -248,6 +248,17 @@ tr:hover td{background:#1e3a5f}
   <div class="upload-status" id="rptUploadStatus"></div>
 </div>
 
+<div class="filter-panel" id="rptFilterPanel">
+  <div class="filter-panel-header">
+    <span>周报客户筛选</span>
+    <button class="quick-btn" onclick="rptSelectAll()">全选</button>
+    <button class="quick-btn" onclick="rptSelectOnline()">仅线上</button>
+    <button class="quick-btn" onclick="rptSelectTest()">仅测试</button>
+    <button class="quick-btn" onclick="rptSelectNone()">清空</button>
+  </div>
+  <div class="cust-grid" id="rptCustGrid"></div>
+</div>
+
 <div class="rpt-header-card">
   <div class="rpt-week-info">
     <span class="rpt-week-num" id="rptWeekNum"></span>
@@ -359,9 +370,32 @@ function handleRptFiles(files){
     try{all=all.concat(parseCSV(e.target.result));n++;
       if(n===csvFiles.length){const ex=loadData();const{merged,added}=mergeData(ex,all);saveData(merged);
         rptSt.textContent=`导入 ${all.length} 行，新增 ${added}，共 ${merged.length} 行`;rptSt.className='upload-status';rptSt.style.display='block';
-        buildCustPanel();renderAll();renderWeeklyReport();}
+        buildCustPanel();buildRptCustPanel();renderAll();renderWeeklyReport();}
     }catch(err){rptSt.textContent='解析失败：'+err.message;rptSt.className='upload-status error';rptSt.style.display='block';}};rd.readAsText(f);});
 }
+
+// Report customer filter
+let rptSelectedCusts=new Set();
+function buildRptCustPanel(){
+  const rows=loadData();
+  const custs=[...new Set(rows.map(r=>r[C]))].filter(c=>!isInternal(c)).sort((a,b)=>{const ao=isOn(a)?0:1,bo=isOn(b)?0:1;return ao-bo||a.localeCompare(b);});
+  rptSelectedCusts=new Set(custs);
+  const grid=document.getElementById('rptCustGrid');
+  grid.innerHTML=custs.map(c=>`<label class="cust-chip checked" data-c="${c}"><input type="checkbox" checked><span class="dot ${isOn(c)?'dot-online':'dot-test'}"></span>${c}</label>`).join('');
+  grid.querySelectorAll('.cust-chip').forEach(el=>{
+    el.addEventListener('click',e=>{
+      const cb=el.querySelector('input');const c=el.dataset.c;
+      if(cb.checked){rptSelectedCusts.delete(c);cb.checked=false;el.classList.remove('checked');}
+      else{rptSelectedCusts.add(c);cb.checked=true;el.classList.add('checked');}
+      renderWeeklyReport();e.preventDefault();
+    });
+  });
+}
+function rptSelectAll(){document.querySelectorAll('#rptCustGrid .cust-chip').forEach(el=>{el.classList.add('checked');el.querySelector('input').checked=true;rptSelectedCusts.add(el.dataset.c);});renderWeeklyReport();}
+function rptSelectNone(){document.querySelectorAll('#rptCustGrid .cust-chip').forEach(el=>{el.classList.remove('checked');el.querySelector('input').checked=false;});rptSelectedCusts.clear();renderWeeklyReport();}
+function rptSelectOnline(){document.querySelectorAll('#rptCustGrid .cust-chip').forEach(el=>{const on=isOn(el.dataset.c);el.classList.toggle('checked',on);el.querySelector('input').checked=on;if(on)rptSelectedCusts.add(el.dataset.c);else rptSelectedCusts.delete(el.dataset.c);});renderWeeklyReport();}
+function rptSelectTest(){document.querySelectorAll('#rptCustGrid .cust-chip').forEach(el=>{const t=!isOn(el.dataset.c);el.classList.toggle('checked',t);el.querySelector('input').checked=t;if(t)rptSelectedCusts.add(el.dataset.c);else rptSelectedCusts.delete(el.dataset.c);});renderWeeklyReport();}
+
 function exportCSV(){const rows=loadData();if(!rows.length)return alert('无数据');
   let csv='date,vid,pkg_name,os,ver,unique_uid_count,total_host_video_minutes,customer,shape_uid_count,makeup_uid_count,filter_uid_count,sticker_uid_count\n';
   rows.forEach(r=>{csv+=r.map(v=>`"${v}"`).join(',')+'\n';});
@@ -789,8 +823,18 @@ function dateToNum(d){return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDat
 function numToDate(n){return new Date(String(n).slice(0,4)+'-'+String(n).slice(4,6)+'-'+String(n).slice(6));}
 function fmtMD(d){return (d.getMonth()+1)+'/'+d.getDate();}
 
+function renderWeeklyReportEmpty(){
+  document.getElementById('rptWeekNum').textContent='';
+  document.getElementById('rptWeekRange').textContent='';
+  document.getElementById('rptMeta').textContent='请勾选客户后查看数据';
+  document.getElementById('rptStatusGrid').innerHTML='';
+  ['rptDailyChart','rptCompareBar','rptComparePie','rptCustCompare'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b">请勾选客户</div>';});
+  ['rptDailyTable','rptCompareTable','rptCustTable','rptFeatTable'].forEach(id=>document.getElementById(id).innerHTML='');
+}
+
 function renderWeeklyReport(){
-  const allRows=loadData().filter(r=>!isInternal(r[C]));if(!allRows.length)return;
+  const allRows=loadData().filter(r=>!isInternal(r[C])&&rptSelectedCusts.has(r[C]));if(!allRows.length){renderWeeklyReportEmpty();return;}
   const now=new Date();
   const cw=reportWeekRange(now);
   const cwFri=dateToNum(cw.fri),cwThu=dateToNum(cw.thu);
@@ -983,6 +1027,7 @@ function initApp(){
     saveData(HISTORICAL_DATA);
   }
   buildCustPanel();
+  buildRptCustPanel();
   renderAll();
 }
 </script>
