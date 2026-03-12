@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>高级美颜用量分析看板</title>
+<title>高级美颜产品看板</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
 <style>
@@ -122,6 +122,7 @@ tr:hover td{background:#1e3a5f}
 .ws-tag{background:#1e293b;border:1px solid #334155;border-radius:6px;padding:3px 10px;font-size:11px;color:#e2e8f0}
 .ws-tag.online{border-color:rgba(16,185,129,.3);color:#10b981}
 .ws-tag.test{border-color:rgba(245,158,11,.3);color:#f59e0b}
+.ws-tag.test-has-online{border-color:rgba(6,182,212,.4);color:#06b6d4;background:rgba(6,182,212,.08)}
 .ws-tag .ws-uid{color:#64748b;font-size:10px;margin-left:4px}
 .ws-note{margin-top:10px;font-size:11px;color:#64748b}
 
@@ -141,7 +142,7 @@ tr:hover td{background:#1e3a5f}
 </head>
 <body>
 <div class="header">
-  <h1>高级美颜用量分析看板 <span class="week-badge" id="weekBadge"></span></h1>
+  <h1>高级美颜产品看板 <span class="week-badge" id="weekBadge"></span></h1>
   <p id="headerInfo">拖入 DataLego 导出的 CSV 文件即可更新数据</p>
   <div class="main-tabs" id="mainTabs">
     <button class="main-tab active" data-tab="analysis" onclick="switchMainTab('analysis')">用量分析</button>
@@ -221,20 +222,6 @@ tr:hover td{background:#1e3a5f}
   <div class="chart-box full" style="margin-top:12px"><div id="custWeekTable"></div></div>
 </div>
 
-<div class="section"><div class="section-title">商业化进展 & 周报</div>
-  <div class="chart-row">
-    <div class="chart-box"><div id="cFunnel" class="chart"></div></div>
-    <div class="chart-box"><div id="cPipeline" class="chart"></div></div>
-  </div>
-  <div class="chart-box full" style="margin-top:12px"><div class="section-title" style="margin-bottom:8px">里程碑</div><div id="timeline"></div></div>
-  <div class="report-section" style="margin-top:12px" id="reportSection">
-    <div class="report-header">
-      <h3 id="reportTitle">周报记录</h3>
-      <div class="report-tabs" id="reportTabs"></div>
-    </div>
-    <div id="reportBody"></div>
-  </div>
-</div>
 
 </div><!-- /tabAnalysis -->
 
@@ -295,6 +282,25 @@ tr:hover td{background:#1e3a5f}
   <div class="chart-box full"><div id="rptFeatTable"></div></div>
 </div>
 
+<div class="section" style="margin-top:20px">
+  <div class="section-title">商业化进展</div>
+  <div class="chart-row">
+    <div class="chart-box"><div id="cFunnel" class="chart"></div></div>
+    <div class="chart-box"><div id="cPipeline" class="chart"></div></div>
+  </div>
+  <div class="chart-box full" style="margin-top:12px"><div class="section-title" style="margin-bottom:8px">里程碑</div><div id="timeline"></div></div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <div class="report-section" id="reportSection">
+    <div class="report-header">
+      <h3 id="reportTitle">周报记录</h3>
+      <div class="report-tabs" id="reportTabs"></div>
+    </div>
+    <div id="reportBody"></div>
+  </div>
+</div>
+
 </div><!-- /tabReport -->
 
 </div>
@@ -306,6 +312,10 @@ const VID_MAP={"544407":"kittenChat测试","946320":"kittenChat线上","1569974"
 const D=0,V=1,P=2,O=3,VR=4,U=5,M=6,C=7,SH=8,MK=9,FI=10,ST=11;
 const isInternal=c=>!c||c.includes('声网')||c.includes('声动互娱')||c==='未匹配';
 const isOn=c=>c&&!isInternal(c)&&c.includes('线上')&&!c.includes('测试');
+function hasOnlineVersion(testName){
+  const base=testName.replace(/测试\d*$/,'');
+  return Object.values(VID_MAP).some(n=>n.startsWith(base)&&n.includes('线上'));
+}
 const fmtD=d=>`${String(d).slice(0,4)}-${String(d).slice(4,6)}-${String(d).slice(6)}`;
 const shortD=d=>`${String(d).slice(4,6)}-${String(d).slice(6)}`;
 const COLORS=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316','#6366f1','#14b8a6','#84cc16','#e879f9'];
@@ -350,11 +360,11 @@ function handleFiles(files){
   csvFiles.forEach(f=>{const rd=new FileReader();rd.onload=e=>{
     try{all=all.concat(parseCSV(e.target.result));n++;
       if(n===csvFiles.length){const ex=loadData();const{merged,added}=mergeData(ex,all);saveData(merged);
-        showSt(`导入 ${all.length} 行，新增 ${added}，共 ${merged.length} 行`);buildCustPanel();renderAll();}
+        showSt(`导入 ${all.length} 行，新增 ${added}，共 ${merged.length} 行`);buildCustPanel();buildRptCustPanel();renderAll();if(activeTab==='report')renderWeeklyReport();}
     }catch(err){showSt('解析失败：'+err.message,1);}};rd.readAsText(f);});
 }
 function showSt(m,e){statusEl.textContent=m;statusEl.className='upload-status'+(e?' error':'');statusEl.style.display='block';}
-function clearData(){if(confirm('确定清空所有数据？')){localStorage.removeItem(SK);buildCustPanel();renderAll();showSt('已清空');}}
+function clearData(){if(confirm('确定清空所有数据？')){localStorage.removeItem(SK);buildCustPanel();buildRptCustPanel();renderAll();showSt('已清空');}}
 
 // Report tab upload
 const rptDZ=document.getElementById('rptDropZone'),rptFI=document.getElementById('rptFileInput'),rptSt=document.getElementById('rptUploadStatus');
@@ -496,7 +506,7 @@ function renderAll(){
     const onlineCW=cwCusts.filter(c=>isOn(c)).sort();
     const testCW=cwCusts.filter(c=>!isOn(c)).sort();
     const uidByCust={};cwRows.forEach(r=>{uidByCust[r[C]]=(uidByCust[r[C]]||0)+r[U];});
-    const mkTag=(c,cls)=>`<span class="ws-tag ${cls}">${c}<span class="ws-uid">${(uidByCust[c]||0).toLocaleString()} 主播</span></span>`;
+    const mkTag=(c,cls)=>{const tc=cls==='test'&&hasOnlineVersion(c)?'test-has-online':cls;const lb=tc==='test-has-online'?' (已上线)':'';return `<span class="ws-tag ${tc}">${c}${lb}<span class="ws-uid">${(uidByCust[c]||0).toLocaleString()} 主播</span></span>`;};
     const prevWL='W'+String(cw-1).padStart(2,'0');
     const pwRows=rows.filter(r=>isoWeekLabel(r[D])===prevWL);
     const pwCusts=[...new Set(pwRows.filter(r=>r[U]>0).map(r=>r[C]))];
@@ -680,9 +690,6 @@ function renderAll(){
   });
   ct+='</tbody></table></div>';
   document.getElementById('custWeekTable').innerHTML=ct;
-
-  renderBiz();
-  renderReport();
 }
 
 function renderEmpty(){
@@ -691,7 +698,6 @@ function renderEmpty(){
   ['cDailyUid','cDailyMin','cWeekUid','cWeekMin','cOsTrend','cOsPie','cFeatPie','cFeatTrend','cCustFeat','cCustTrend','cCustWeek'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b">等待数据...</div>';});
   ['weekTable','custFeatTable','custWeekTable'].forEach(id=>document.getElementById(id).innerHTML='');
-  renderBiz();renderReport();
 }
 
 // ========================= BIZ DATA =========================
@@ -831,6 +837,7 @@ function renderWeeklyReportEmpty(){
   ['rptDailyChart','rptCompareBar','rptComparePie','rptCustCompare'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b">请勾选客户</div>';});
   ['rptDailyTable','rptCompareTable','rptCustTable','rptFeatTable'].forEach(id=>document.getElementById(id).innerHTML='');
+  renderBiz();renderReport();
 }
 
 function renderWeeklyReport(){
@@ -868,7 +875,11 @@ function renderWeeklyReport(){
   const pwTest=pwCusts.filter(c=>!isOn(c));
   const newTest=testNow.filter(c=>!pwTest.includes(c));
 
-  const mkTag=(c,cls,agg)=>`<span class="ws-tag ${cls}">${c}<span class="ws-uid">${agg[c]?agg[c].uid.toLocaleString():0} 主播</span></span>`;
+  const mkTag=(c,cls,agg)=>{
+    const tcls=cls==='test'&&hasOnlineVersion(c)?'test-has-online':cls;
+    const label=tcls==='test-has-online'?' (已上线)':'';
+    return `<span class="ws-tag ${tcls}">${c}${label}<span class="ws-uid">${agg[c]?agg[c].uid.toLocaleString():0} 主播</span></span>`;
+  };
   const newNote=(arr,label)=>arr.length?`<div class="ws-note">🆕 本周新增${label}：${arr.join('、')}</div>`:'';
 
   document.getElementById('rptStatusGrid').innerHTML=`
@@ -1014,11 +1025,14 @@ function renderWeeklyReport(){
   if(!featCusts.length)ft+=`<tr><td colspan="7" style="color:#64748b;text-align:center">本周暂无美颜功能数据（需要明细CSV，仅UID汇总数据不含功能分布）</td></tr>`;
   ft+='</tbody></table></div>';
   document.getElementById('rptFeatTable').innerHTML=ft;
+
+  renderBiz();
+  renderReport();
 }
 
 // ========================= INIT =========================
 function initApp(){
-  const DATA_VER='v5_20260311';
+  const DATA_VER='v6_20260312';
   if(localStorage.getItem('beauty_data_ver')!==DATA_VER){
     localStorage.removeItem(SK);
     localStorage.setItem('beauty_data_ver',DATA_VER);
