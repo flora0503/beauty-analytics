@@ -14,6 +14,14 @@ a{color:#3b82f6;text-decoration:none}
 .header h1{font-size:24px;color:#f1f5f9;margin-bottom:4px}
 .header p{color:#94a3b8;font-size:13px}
 .week-badge{display:inline-block;background:#3b82f6;color:#fff;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-left:8px;vertical-align:middle}
+
+/* Main Tab Nav */
+.main-tabs{display:flex;gap:4px;justify-content:center;margin-top:14px}
+.main-tab{background:#1e293b;color:#94a3b8;border:1px solid #334155;padding:8px 28px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.main-tab:hover{border-color:#475569;color:#e2e8f0}
+.main-tab.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
 .container{max-width:1440px;margin:0 auto;padding:20px}
 
 /* Upload */
@@ -117,6 +125,17 @@ tr:hover td{background:#1e3a5f}
 .ws-tag .ws-uid{color:#64748b;font-size:10px;margin-left:4px}
 .ws-note{margin-top:10px;font-size:11px;color:#64748b}
 
+/* Report Tab */
+.rpt-header-card{background:linear-gradient(135deg,#1e3a5f,#1e293b);border:1px solid #334155;border-radius:12px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.rpt-week-info{display:flex;align-items:center;gap:12px}
+.rpt-week-num{font-size:20px;font-weight:700;color:#f1f5f9}
+.rpt-week-range{color:#94a3b8;font-size:13px}
+.rpt-meta{color:#64748b;font-size:12px}
+.rpt-delta{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:6px}
+.rpt-delta.up{background:rgba(16,185,129,.15);color:#10b981}
+.rpt-delta.down{background:rgba(244,63,94,.15);color:#f43f5e}
+.rpt-delta.flat{background:rgba(100,116,139,.15);color:#94a3b8}
+
 @media(max-width:900px){.chart-row{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -124,8 +143,15 @@ tr:hover td{background:#1e3a5f}
 <div class="header">
   <h1>高级美颜用量分析看板 <span class="week-badge" id="weekBadge"></span></h1>
   <p id="headerInfo">拖入 DataLego 导出的 CSV 文件即可更新数据</p>
+  <div class="main-tabs" id="mainTabs">
+    <button class="main-tab active" data-tab="analysis" onclick="switchMainTab('analysis')">用量分析</button>
+    <button class="main-tab" data-tab="report" onclick="switchMainTab('report')">周报</button>
+  </div>
 </div>
 <div class="container">
+
+<!-- ========== TAB: ANALYSIS ========== -->
+<div class="tab-panel active" id="tabAnalysis">
 
 <div class="upload-box" id="dropZone">
   <h3>拖入 CSV 文件 或 点击选择（支持多文件）</h3>
@@ -210,12 +236,44 @@ tr:hover td{background:#1e3a5f}
   </div>
 </div>
 
+</div><!-- /tabAnalysis -->
+
+<!-- ========== TAB: WEEKLY REPORT ========== -->
+<div class="tab-panel" id="tabReport">
+
+<div class="rpt-header-card">
+  <div class="rpt-week-info">
+    <span class="rpt-week-num" id="rptWeekNum"></span>
+    <span class="rpt-week-range" id="rptWeekRange"></span>
+  </div>
+  <div class="rpt-meta" id="rptMeta"></div>
+</div>
+
+<div class="ws-grid" id="rptStatusGrid"></div>
+
+<div class="section" style="margin-top:20px">
+  <div class="section-title">周对比概览</div>
+  <div class="chart-row">
+    <div class="chart-box"><div id="rptCompareBar" class="chart"></div></div>
+    <div class="chart-box"><div id="rptComparePie" class="chart"></div></div>
+  </div>
+  <div class="chart-box full" style="margin-top:12px"><div id="rptCompareTable"></div></div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <div class="section-title">客户主播数周对比</div>
+  <div class="chart-box full"><div id="rptCustCompare" class="chart tall"></div></div>
+  <div class="chart-box full" style="margin-top:12px"><div id="rptCustTable"></div></div>
+</div>
+
+</div><!-- /tabReport -->
+
 </div>
 
 <script>
 // ========================= CONSTANTS =========================
 const SK='beauty_v3',SK_REPORT='beauty_reports';
-const VID_MAP={"544407":"kittenChat测试","946320":"kittenChat线上","1569974":"鲸旗线上","1570586":"鲸旗测试","1028123":"字节微科线上","1028124":"字节微科测试","1664083":"秒榜线上","1626089":"秒榜测试","1293695":"成都煜展测试","370277":"山东千千飞测试","1538022":"元蓬测试","1629106":"Erato","130451":"声网（内部测试账号）","1019272":"声动互娱","251734":"核桃线上","521771":"成都煜展线上","1655313":"秒榜测试2","1597112":"自然选择测试","1376771":"核桃测试"};
+const VID_MAP={"544407":"kittenChat测试","946320":"kittenChat线上","1569974":"鲸旗线上","1570586":"鲸旗测试","1028123":"字节微科线上","1028124":"字节微科测试","1664083":"秒榜线上","1626089":"秒榜测试","1293695":"成都煜展测试","370277":"山东千千飞测试","1538022":"元蓬测试","1629106":"Erato","130451":"声网（内部测试账号）","1019272":"声动互娱","251734":"核桃线上","521771":"成都煜展线上","1655313":"秒榜测试2","1597112":"自然选择测试","1376771":"核桃测试","1405680":"悦唐测试","1436685":"酷漾","421280":"白兔"};
 const D=0,V=1,P=2,O=3,VR=4,U=5,M=6,C=7,SH=8,MK=9,FI=10,ST=11;
 const isOn=c=>c&&c.includes('线上')&&!c.includes('测试');
 const fmtD=d=>`${String(d).slice(0,4)}-${String(d).slice(4,6)}-${String(d).slice(6)}`;
@@ -671,9 +729,158 @@ function clearReport(){
   document.getElementById('reportText').value='';
 }
 
+// ========================= MAIN TABS =========================
+let activeTab='analysis';
+function switchMainTab(tab){
+  activeTab=tab;
+  document.querySelectorAll('.main-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.getElementById('tabAnalysis').classList.toggle('active',tab==='analysis');
+  document.getElementById('tabReport').classList.toggle('active',tab==='report');
+  if(tab==='report')renderWeeklyReport();
+}
+
+// ========================= REPORT WEEK (Fri-Thu) =========================
+function reportWeekRange(refDate){
+  const d=new Date(refDate);d.setHours(0,0,0,0);
+  const dow=d.getDay();// 0=Sun..6=Sat
+  const daysSinceFri=(dow+2)%7;// Fri=0,Sat=1,...Thu=6
+  const fri=new Date(d);fri.setDate(d.getDate()-daysSinceFri);
+  const thu=new Date(fri);thu.setDate(fri.getDate()+6);
+  return{fri,thu};
+}
+function dateToNum(d){return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();}
+function numToDate(n){return new Date(String(n).slice(0,4)+'-'+String(n).slice(4,6)+'-'+String(n).slice(6));}
+function fmtMD(d){return (d.getMonth()+1)+'/'+d.getDate();}
+
+function renderWeeklyReport(){
+  const allRows=loadData();if(!allRows.length)return;
+  const now=new Date();
+  const cw=reportWeekRange(now);
+  const cwFri=dateToNum(cw.fri),cwThu=dateToNum(cw.thu);
+  const prevEnd=new Date(cw.fri);prevEnd.setDate(prevEnd.getDate()-1);
+  const pw=reportWeekRange(prevEnd);
+  const pwFri=dateToNum(pw.fri),pwThu=dateToNum(pw.thu);
+  const cwIso=isoWeekNum(cwFri);
+
+  const cwRows=allRows.filter(r=>r[D]>=cwFri&&r[D]<=cwThu);
+  const pwRows=allRows.filter(r=>r[D]>=pwFri&&r[D]<=pwThu);
+  const cwDays=new Set(cwRows.map(r=>r[D])).size;
+  const pwDays=new Set(pwRows.map(r=>r[D])).size;
+
+  document.getElementById('rptWeekNum').textContent=`Week ${cwIso}`;
+  document.getElementById('rptWeekRange').textContent=`${fmtMD(cw.fri)}(周五) ~ ${fmtMD(cw.thu)}(周四)`;
+  document.getElementById('rptMeta').textContent=`本周已有 ${cwDays} 天数据 | 上周 ${pwDays} 天`;
+
+  // Aggregate by customer
+  function aggByCust(rows){
+    const m={};
+    rows.forEach(r=>{const c=r[C];if(!m[c])m[c]={uid:0,min:0};m[c].uid+=r[U];m[c].min+=r[M];});
+    return m;
+  }
+  const cwAgg=aggByCust(cwRows),pwAgg=aggByCust(pwRows);
+  const cwCusts=Object.keys(cwAgg).filter(c=>cwAgg[c].uid>0);
+  const onlineNow=cwCusts.filter(c=>isOn(c)).sort((a,b)=>cwAgg[b].uid-cwAgg[a].uid);
+  const testNow=cwCusts.filter(c=>!isOn(c)).sort((a,b)=>cwAgg[b].uid-cwAgg[a].uid);
+  const pwCusts=Object.keys(pwAgg).filter(c=>pwAgg[c].uid>0);
+  const pwOnline=pwCusts.filter(c=>isOn(c));
+  const newOnline=onlineNow.filter(c=>!pwOnline.includes(c));
+  const pwTest=pwCusts.filter(c=>!isOn(c));
+  const newTest=testNow.filter(c=>!pwTest.includes(c));
+
+  const mkTag=(c,cls,agg)=>`<span class="ws-tag ${cls}">${c}<span class="ws-uid">${agg[c]?agg[c].uid.toLocaleString():0} 主播</span></span>`;
+  const newNote=(arr,label)=>arr.length?`<div class="ws-note">🆕 本周新增${label}：${arr.join('、')}</div>`:'';
+
+  document.getElementById('rptStatusGrid').innerHTML=`
+    <div class="ws-card">
+      <div class="ws-card-title"><span class="ws-count green">${onlineNow.length}</span><span>已上线客户</span>
+        ${pwOnline.length!==onlineNow.length?`<span class="rpt-delta ${onlineNow.length>pwOnline.length?'up':'down'}">${onlineNow.length>pwOnline.length?'+':''}${onlineNow.length-pwOnline.length} vs 上周</span>`:''}</div>
+      <div class="ws-list">${onlineNow.length?onlineNow.map(c=>mkTag(c,'online',cwAgg)).join(''):'<span style="color:#64748b;font-size:12px">本周暂无</span>'}</div>
+      ${newNote(newOnline,'上线')}
+    </div>
+    <div class="ws-card">
+      <div class="ws-card-title"><span class="ws-count amber">${testNow.length}</span><span>集成中客户（测试阶段）</span>
+        ${pwTest.length!==testNow.length?`<span class="rpt-delta ${testNow.length>pwTest.length?'up':'down'}">${testNow.length>pwTest.length?'+':''}${testNow.length-pwTest.length} vs 上周</span>`:''}</div>
+      <div class="ws-list">${testNow.length?testNow.map(c=>mkTag(c,'test',cwAgg)).join(''):'<span style="color:#64748b;font-size:12px">本周暂无</span>'}</div>
+      ${newNote(newTest,'集成')}
+    </div>`;
+
+  // Compare totals
+  const cwTotU=cwRows.reduce((a,r)=>a+r[U],0),pwTotU=pwRows.reduce((a,r)=>a+r[U],0);
+  const cwTotM=cwRows.reduce((a,r)=>a+r[M],0),pwTotM=pwRows.reduce((a,r)=>a+r[M],0);
+  const cwOnU=cwRows.filter(r=>isOn(r[C])).reduce((a,r)=>a+r[U],0);
+  const pwOnU=pwRows.filter(r=>isOn(r[C])).reduce((a,r)=>a+r[U],0);
+  const pctU=pwTotU?((cwTotU-pwTotU)/pwTotU*100):cwTotU?100:0;
+  const pctM=pwTotM?((cwTotM-pwTotM)/pwTotM*100):cwTotM?100:0;
+  const pctOnU=pwOnU?((cwOnU-pwOnU)/pwOnU*100):cwOnU?100:0;
+
+  // Compare bar chart
+  const c1=gc('rptCompareBar');
+  c1.setOption({...TH,title:{text:'本周 vs 上周',left:'center',textStyle:{color:'#f1f5f9',fontSize:13}},
+    tooltip:{...TH.tooltip,trigger:'axis',axisPointer:{type:'shadow'}},
+    legend:lgd(['上周','本周']),grid:{left:60,right:20,top:44,bottom:36},
+    xAxis:{type:'category',data:['总主播数','线上主播数','分钟数(百)'],axisLabel:{color:'#64748b',fontSize:11},axisLine:{lineStyle:{color:'#334155'}}},
+    yAxis:yv,
+    series:[
+      {name:'上周',type:'bar',data:[pwTotU,pwOnU,Math.round(pwTotM/100)],barWidth:28,itemStyle:{color:'#475569',borderRadius:[4,4,0,0]}},
+      {name:'本周',type:'bar',data:[cwTotU,cwOnU,Math.round(cwTotM/100)],barWidth:28,itemStyle:{color:'#3b82f6',borderRadius:[4,4,0,0]}}
+    ]});
+
+  // Pie: online vs test
+  const cwTestU=cwRows.filter(r=>!isOn(r[C])).reduce((a,r)=>a+r[U],0);
+  const c2=gc('rptComparePie');
+  c2.setOption({...TH,title:{text:'本周线上 vs 测试占比',left:'center',textStyle:{color:'#f1f5f9',fontSize:13}},
+    tooltip:{...TH.tooltip},
+    series:[{type:'pie',radius:['40%','65%'],center:['50%','55%'],
+      data:[{value:cwOnU,name:'线上',itemStyle:{color:'#10b981'}},{value:cwTestU,name:'测试',itemStyle:{color:'#f59e0b'}}],
+      label:{color:'#e2e8f0',fontSize:11,formatter:'{b}: {c} ({d}%)'},
+      emphasis:{label:{fontSize:13,fontWeight:'bold'}}}]});
+
+  // Summary table
+  const mkDelta=(cur,prev)=>{const p=prev?((cur-prev)/prev*100):cur?100:0;
+    return `<span class="rpt-delta ${p>0?'up':p<0?'down':'flat'}">${p>0?'+':''}${p.toFixed(1)}%</span>`;};
+  let st=`<div class="table-wrap"><table><thead><tr><th>指标</th><th>上周 (${fmtMD(pw.fri)}~${fmtMD(pw.thu)})</th><th>本周 (${fmtMD(cw.fri)}~${fmtMD(cw.thu)})</th><th>环比</th></tr></thead><tbody>`;
+  st+=`<tr><td>总主播数</td><td>${pwTotU.toLocaleString()}</td><td>${cwTotU.toLocaleString()}</td><td>${mkDelta(cwTotU,pwTotU)}</td></tr>`;
+  st+=`<tr><td>线上主播数</td><td>${pwOnU.toLocaleString()}</td><td>${cwOnU.toLocaleString()}</td><td>${mkDelta(cwOnU,pwOnU)}</td></tr>`;
+  st+=`<tr><td>视频分钟数</td><td>${Math.round(pwTotM).toLocaleString()}</td><td>${Math.round(cwTotM).toLocaleString()}</td><td>${mkDelta(cwTotM,pwTotM)}</td></tr>`;
+  st+=`<tr><td>已上线客户数</td><td>${pwOnline.length}</td><td>${onlineNow.length}</td><td>${mkDelta(onlineNow.length,pwOnline.length)}</td></tr>`;
+  st+=`<tr><td>集成中客户数</td><td>${pwTest.length}</td><td>${testNow.length}</td><td>${mkDelta(testNow.length,pwTest.length)}</td></tr>`;
+  st+=`<tr><td>数据天数</td><td>${pwDays}</td><td>${cwDays}</td><td>—</td></tr>`;
+  st+=`</tbody></table></div>`;
+  document.getElementById('rptCompareTable').innerHTML=st;
+
+  // Customer comparison chart
+  const allC=[...new Set([...Object.keys(cwAgg),...Object.keys(pwAgg)])].filter(c=>isOn(c)||(cwAgg[c]&&cwAgg[c].uid>10)||(pwAgg[c]&&pwAgg[c].uid>10));
+  allC.sort((a,b)=>(cwAgg[b]?cwAgg[b].uid:0)-(cwAgg[a]?cwAgg[a].uid:0));
+  const c3=gc('rptCustCompare');
+  c3.setOption({...TH,title:{text:'各客户主播数 — 本周 vs 上周',left:'center',textStyle:{color:'#f1f5f9',fontSize:13}},
+    tooltip:{...TH.tooltip,trigger:'axis',axisPointer:{type:'shadow'}},
+    legend:lgd(['上周','本周']),grid:{left:100,right:20,top:44,bottom:20},
+    yAxis:{type:'category',data:allC.slice().reverse(),axisLabel:{color:'#94a3b8',fontSize:10},axisLine:{lineStyle:{color:'#334155'}}},
+    xAxis:{...yv,position:'top'},
+    series:[
+      {name:'上周',type:'bar',data:allC.slice().reverse().map(c=>pwAgg[c]?pwAgg[c].uid:0),barWidth:14,itemStyle:{color:'#475569',borderRadius:[0,3,3,0]}},
+      {name:'本周',type:'bar',data:allC.slice().reverse().map(c=>cwAgg[c]?cwAgg[c].uid:0),barWidth:14,itemStyle:{color:'#3b82f6',borderRadius:[0,3,3,0]}}
+    ]});
+
+  // Customer detail table
+  let ct=`<div class="table-wrap"><table><thead><tr><th>客户</th><th>类型</th><th>上周主播数</th><th>本周主播数</th><th>环比</th><th>上周分钟</th><th>本周分钟</th></tr></thead><tbody>`;
+  const allCustSorted=[...new Set([...Object.keys(cwAgg),...Object.keys(pwAgg)])].sort((a,b)=>(cwAgg[b]?cwAgg[b].uid:0)-(cwAgg[a]?cwAgg[a].uid:0));
+  allCustSorted.forEach(nm=>{
+    const t=isOn(nm)?'线上':'测试';
+    const cu=cwAgg[nm]?cwAgg[nm].uid:0,pu=pwAgg[nm]?pwAgg[nm].uid:0;
+    const cm=cwAgg[nm]?Math.round(cwAgg[nm].min):0,pm=pwAgg[nm]?Math.round(pwAgg[nm].min):0;
+    const p=pu?((cu-pu)/pu*100):cu?100:0;
+    ct+=`<tr><td>${nm}</td><td><span class="badge badge-${t==='线上'?'on':'test'}">${t}</span></td>`;
+    ct+=`<td>${pu.toLocaleString()}</td><td>${cu.toLocaleString()}</td><td>${pctStr(p)}</td>`;
+    ct+=`<td>${pm.toLocaleString()}</td><td>${cm.toLocaleString()}</td></tr>`;
+  });
+  ct+=`</tbody></table></div>`;
+  document.getElementById('rptCustTable').innerHTML=ct;
+}
+
 // ========================= INIT =========================
 function initApp(){
-  const DATA_VER='v3_20260312';
+  const DATA_VER='v4_20260311';
   if(localStorage.getItem('beauty_data_ver')!==DATA_VER){
     localStorage.removeItem(SK);
     localStorage.setItem('beauty_data_ver',DATA_VER);
