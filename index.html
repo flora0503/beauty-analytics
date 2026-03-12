@@ -100,6 +100,23 @@ tr:hover td{background:#1e3a5f}
 .tl-text{color:#cbd5e1}
 .tl-text b{color:#f1f5f9}
 
+/* Week Status Panel */
+.week-status{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:20px;margin-bottom:24px}
+.week-status-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.week-status-header h3{color:#f1f5f9;font-size:15px}
+.week-status-header .ws-badge{background:#3b82f6;color:#fff;padding:3px 10px;border-radius:16px;font-size:11px;font-weight:600}
+.ws-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ws-card{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px}
+.ws-card-title{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ws-card-title .ws-count{font-size:22px;font-weight:700}.ws-count.green{color:#10b981}.ws-count.amber{color:#f59e0b}
+.ws-card-title span:last-child{color:#94a3b8;font-size:12px}
+.ws-list{display:flex;flex-wrap:wrap;gap:6px}
+.ws-tag{background:#1e293b;border:1px solid #334155;border-radius:6px;padding:3px 10px;font-size:11px;color:#e2e8f0}
+.ws-tag.online{border-color:rgba(16,185,129,.3);color:#10b981}
+.ws-tag.test{border-color:rgba(245,158,11,.3);color:#f59e0b}
+.ws-tag .ws-uid{color:#64748b;font-size:10px;margin-left:4px}
+.ws-note{margin-top:10px;font-size:11px;color:#64748b}
+
 @media(max-width:900px){.chart-row{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -136,6 +153,8 @@ tr:hover td{background:#1e3a5f}
 </div>
 
 <div class="kpi-grid" id="kpiGrid"></div>
+
+<div id="weekStatusPanel"></div>
 
 <div class="section"><div class="section-title">每日主播使用量趋势</div>
   <div class="chart-box full"><div id="cDailyUid" class="chart tall"></div></div></div>
@@ -340,6 +359,39 @@ function renderAll(){
     <div class="kpi-card"><div class="kpi-label">累计分钟数</div><div class="kpi-value purple">${Math.round(totM).toLocaleString()}</div><div class="kpi-sub">日均 ${Math.round(totM/dates.length).toLocaleString()}</div></div>
     <div class="kpi-card"><div class="kpi-label">美型 / 贴纸</div><div class="kpi-value cyan">${tSh.toLocaleString()} / ${tSt.toLocaleString()}</div><div class="kpi-sub">滤镜 ${tFi}${tMk?' | 美妆 '+tMk:''}</div></div>`;
 
+  // Week Status Panel: 已上线 & 集成中客户
+  {
+    const cwLabel='W'+String(cw).padStart(2,'0');
+    const cwRows=rows.filter(r=>isoWeekLabel(r[D])===cwLabel);
+    const cwCusts=[...new Set(cwRows.filter(r=>r[U]>0).map(r=>r[C]))];
+    const onlineCW=cwCusts.filter(c=>isOn(c)).sort();
+    const testCW=cwCusts.filter(c=>!isOn(c)).sort();
+    const uidByCust={};cwRows.forEach(r=>{uidByCust[r[C]]=(uidByCust[r[C]]||0)+r[U];});
+    const mkTag=(c,cls)=>`<span class="ws-tag ${cls}">${c}<span class="ws-uid">${(uidByCust[c]||0).toLocaleString()} 主播</span></span>`;
+    const prevWL='W'+String(cw-1).padStart(2,'0');
+    const pwRows=rows.filter(r=>isoWeekLabel(r[D])===prevWL);
+    const pwCusts=[...new Set(pwRows.filter(r=>r[U]>0).map(r=>r[C]))];
+    const pwOnline=pwCusts.filter(c=>isOn(c));
+    const newOn=onlineCW.filter(c=>!pwOnline.includes(c));
+    const newNote=newOn.length?`<div class="ws-note">🆕 本周新上线：${newOn.join('、')}</div>`:'';
+    document.getElementById('weekStatusPanel').innerHTML=`
+    <div class="week-status">
+      <div class="week-status-header"><h3>📊 本周客户状态</h3><span class="ws-badge">Week ${cw} (${cwLabel})</span>
+        <span style="color:#64748b;font-size:11px;margin-left:auto">基于当周实际用量数据</span></div>
+      <div class="ws-grid">
+        <div class="ws-card">
+          <div class="ws-card-title"><span class="ws-count green">${onlineCW.length}</span><span>已上线客户</span></div>
+          <div class="ws-list">${onlineCW.length?onlineCW.map(c=>mkTag(c,'online')).join(''):'<span style="color:#64748b;font-size:12px">本周暂无线上客户数据</span>'}</div>
+          ${newNote}
+        </div>
+        <div class="ws-card">
+          <div class="ws-card-title"><span class="ws-count amber">${testCW.length}</span><span>集成中客户（测试阶段）</span></div>
+          <div class="ws-list">${testCW.length?testCW.map(c=>mkTag(c,'test')).join(''):'<span style="color:#64748b;font-size:12px">本周暂无测试客户数据</span>'}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
   const grid={left:60,right:24,top:44,bottom:56};
   const gridW={left:50,right:50,top:44,bottom:46};
   const ax=t=>({type:'category',data:t,axisLabel:{color:'#64748b',rotate:dates.length>14?45:0,fontSize:10},axisLine:{lineStyle:{color:'#334155'}},axisTick:{show:false}});
@@ -506,6 +558,7 @@ function renderAll(){
 
 function renderEmpty(){
   document.getElementById('kpiGrid').innerHTML='<div class="kpi-card" style="grid-column:1/-1;text-align:center;padding:30px"><div class="kpi-label">暂无数据</div><div style="color:#64748b;margin-top:6px">请拖入 CSV 或勾选客户</div></div>';
+  document.getElementById('weekStatusPanel').innerHTML='';
   ['cDailyUid','cDailyMin','cWeekUid','cWeekMin','cOsTrend','cOsPie','cFeatPie','cFeatTrend','cCustFeat','cCustTrend','cCustWeek'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b">等待数据...</div>';});
   ['weekTable','custFeatTable','custWeekTable'].forEach(id=>document.getElementById(id).innerHTML='');
