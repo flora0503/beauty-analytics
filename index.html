@@ -133,6 +133,17 @@ tr:hover td{background:#1e3a5f}
 .rpt-week-range{color:#94a3b8;font-size:13px}
 .rpt-meta{color:#64748b;font-size:12px}
 .rpt-delta{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:6px}
+.rpt-insights{background:linear-gradient(135deg,#0c1829,#162033);border:1px solid #1e3a5f;border-radius:12px;padding:18px 22px;margin-bottom:20px;display:none}
+.rpt-insights.show{display:block}
+.rpt-insights-title{font-size:14px;font-weight:700;color:#3b82f6;margin-bottom:12px}
+.rpt-insights ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.rpt-insights li{font-size:13px;color:#e2e8f0;line-height:1.5;padding-left:22px;position:relative}
+.rpt-insights li::before{content:'';position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%}
+.rpt-insights li.insight-up::before{background:#10b981}
+.rpt-insights li.insight-down::before{background:#ef4444}
+.rpt-insights li.insight-info::before{background:#3b82f6}
+.rpt-insights li.insight-warn::before{background:#f59e0b}
+.rpt-insights li.insight-new::before{background:#8b5cf6}
 .rpt-delta.up{background:rgba(16,185,129,.15);color:#10b981}
 .rpt-delta.down{background:rgba(244,63,94,.15);color:#f43f5e}
 .rpt-delta.flat{background:rgba(100,116,139,.15);color:#94a3b8}
@@ -253,6 +264,8 @@ tr:hover td{background:#1e3a5f}
   </div>
   <div class="rpt-meta" id="rptMeta"></div>
 </div>
+
+<div id="rptInsights" class="rpt-insights"></div>
 
 <div class="ws-grid" id="rptStatusGrid"></div>
 
@@ -837,6 +850,7 @@ function renderWeeklyReportEmpty(){
   ['rptDailyChart','rptCompareBar','rptComparePie','rptCustCompare'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b">请勾选客户</div>';});
   ['rptDailyTable','rptCompareTable','rptCustTable','rptFeatTable'].forEach(id=>document.getElementById(id).innerHTML='');
+  const insEl=document.getElementById('rptInsights');insEl.innerHTML='';insEl.classList.remove('show');
   renderBiz();renderReport();
 }
 
@@ -904,6 +918,41 @@ function renderWeeklyReport(){
   const pctU=pwTotU?((cwTotU-pwTotU)/pwTotU*100):cwTotU?100:0;
   const pctM=pwTotM?((cwTotM-pwTotM)/pwTotM*100):cwTotM?100:0;
   const pctOnU=pwOnU?((cwOnU-pwOnU)/pwOnU*100):cwOnU?100:0;
+
+  // ===== Core Insights =====
+  const ins=[];
+  const fmtPct=v=>(v>0?'+':'')+v.toFixed(1)+'%';
+  if(cwDays>0){
+    const avgU=Math.round(cwTotU/cwDays);
+    ins.push({cls:'info',text:`本周累计主播数 <b>${cwTotU.toLocaleString()}</b>（日均 ${avgU.toLocaleString()}），${pctU>=0?'环比上周增长':'环比上周下降'} <b>${fmtPct(pctU)}</b>`});
+  }
+  if(cwTotM>0){
+    ins.push({cls:pctM>=0?'up':'down',text:`本周视频分钟数 <b>${Math.round(cwTotM).toLocaleString()}</b>，${pctM>=0?'环比增长':'环比下降'} <b>${fmtPct(pctM)}</b>${cwDays<7?' <span style="color:#f59e0b">(数据未满7天，分钟数延迟约2天)</span>':''}`});
+  }else if(cwDays>0){
+    ins.push({cls:'warn',text:`本周视频分钟数暂未更新（分钟数通常延迟2天）`});
+  }
+  if(onlineNow.length>0){
+    ins.push({cls:onlineNow.length>=pwOnline.length?'up':'down',text:`线上客户 <b>${onlineNow.length}</b> 家${onlineNow.length!==pwOnline.length?`（上周 ${pwOnline.length} 家，${onlineNow.length>pwOnline.length?'增加':'减少'} ${Math.abs(onlineNow.length-pwOnline.length)} 家）`:''}`});
+  }
+  if(newOnline.length>0)ins.push({cls:'new',text:`🆕 本周新上线：<b>${newOnline.join('、')}</b>`});
+  if(newTest.length>0)ins.push({cls:'new',text:`🆕 本周新增集成测试：<b>${newTest.join('、')}</b>`});
+  const topGrowth=Object.keys(cwAgg).filter(c=>pwAgg[c]&&pwAgg[c].uid>=5).map(c=>({name:c,cw:cwAgg[c].uid,pw:pwAgg[c].uid,pct:((cwAgg[c].uid-pwAgg[c].uid)/pwAgg[c].uid*100)})).filter(c=>c.pct>10).sort((a,b)=>b.pct-a.pct);
+  if(topGrowth.length>0){
+    const top3=topGrowth.slice(0,3).map(c=>`${c.name}(${fmtPct(c.pct)})`);
+    ins.push({cls:'up',text:`增长较快的客户：<b>${top3.join('、')}</b>`});
+  }
+  const topDecline=Object.keys(cwAgg).filter(c=>pwAgg[c]&&pwAgg[c].uid>=5).map(c=>({name:c,cw:cwAgg[c].uid,pw:pwAgg[c].uid,pct:((cwAgg[c].uid-pwAgg[c].uid)/pwAgg[c].uid*100)})).filter(c=>c.pct<-10).sort((a,b)=>a.pct-b.pct);
+  if(topDecline.length>0){
+    const top3=topDecline.slice(0,3).map(c=>`${c.name}(${fmtPct(c.pct)})`);
+    ins.push({cls:'down',text:`下降较多的客户：<b>${top3.join('、')}</b>`});
+  }
+  const lostOnline=pwOnline.filter(c=>!onlineNow.includes(c));
+  if(lostOnline.length>0)ins.push({cls:'warn',text:`⚠ 上周有数据但本周暂无的线上客户：<b>${lostOnline.join('、')}</b>（可能数据未补全）`});
+  const insEl=document.getElementById('rptInsights');
+  if(ins.length){
+    insEl.innerHTML=`<div class="rpt-insights-title">📋 核心洞察</div><ul>${ins.map(i=>`<li class="insight-${i.cls}">${i.text}</li>`).join('')}</ul>`;
+    insEl.classList.add('show');
+  }else{insEl.innerHTML='';insEl.classList.remove('show');}
 
   // Compare bar chart
   const c1=gc('rptCompareBar');
@@ -1032,7 +1081,7 @@ function renderWeeklyReport(){
 
 // ========================= INIT =========================
 function initApp(){
-  const DATA_VER='v7_20260313';
+  const DATA_VER='v8_20260313';
   if(localStorage.getItem('beauty_data_ver')!==DATA_VER){
     localStorage.removeItem(SK);
     localStorage.setItem('beauty_data_ver',DATA_VER);
