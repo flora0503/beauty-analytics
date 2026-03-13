@@ -820,7 +820,7 @@ function switchMainTab(tab){
 function reportWeekRange(refDate){
   const d=new Date(refDate);d.setHours(0,0,0,0);
   const dow=d.getDay();// 0=Sun..6=Sat
-  const daysSinceFri=(dow+2)%7;// Fri=0,Sat=1,...Thu=6
+  const daysSinceFri=(dow+2)%7||7;// Sat=1,...Thu=6,Fri=7 (Fri belongs to prev week)
   const fri=new Date(d);fri.setDate(d.getDate()-daysSinceFri);
   const thu=new Date(fri);thu.setDate(fri.getDate()+6);
   return{fri,thu};
@@ -848,7 +848,7 @@ function renderWeeklyReport(){
   const prevEnd=new Date(cw.fri);prevEnd.setDate(prevEnd.getDate()-1);
   const pw=reportWeekRange(prevEnd);
   const pwFri=dateToNum(pw.fri),pwThu=dateToNum(pw.thu);
-  const cwIso=isoWeekNum(cwFri);
+  const cwIso=isoWeekNum(cwThu);
 
   const cwRows=allRows.filter(r=>r[D]>=cwFri&&r[D]<=cwThu);
   const pwRows=allRows.filter(r=>r[D]>=pwFri&&r[D]<=pwThu);
@@ -1032,7 +1032,7 @@ function renderWeeklyReport(){
 
 // ========================= INIT =========================
 function initApp(){
-  const DATA_VER='v6_20260312';
+  const DATA_VER='v7_20260313';
   if(localStorage.getItem('beauty_data_ver')!==DATA_VER){
     localStorage.removeItem(SK);
     localStorage.setItem('beauty_data_ver',DATA_VER);
