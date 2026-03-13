@@ -502,6 +502,7 @@ function renderAll(){
   const dArr=dates.map(d=>dU[d]),mArr=dates.map(d=>Math.round(dM[d]));
   const avgD=Math.round(totU/dates.length);
   const maxD=Math.max(...dArr),maxDate=dates[dArr.indexOf(maxD)];
+  const maxMin=Math.max(...mArr),maxMinDate=dates[mArr.indexOf(maxMin)];
   const latD=dates[dates.length-1],latU=dU[latD],prevD=dates.length>1?dates[dates.length-2]:null;
   const chg=prevD&&dU[prevD]?((latU-dU[prevD])/dU[prevD]*100).toFixed(1):'—';
   const tSh=dates.reduce((a,d)=>a+dF[d][0],0),tMk=dates.reduce((a,d)=>a+dF[d][1],0);
@@ -513,7 +514,7 @@ function renderAll(){
     <div class="kpi-card"><div class="kpi-label">最新日主播数</div><div class="kpi-value green">${latU.toLocaleString()}</div><div class="kpi-sub">环比 ${chg>0?'+':''}${chg}%</div></div>
     <div class="kpi-card"><div class="kpi-label">日均主播数</div><div class="kpi-value amber">${avgD.toLocaleString()}</div><div class="kpi-sub">线上 ${totU?(totOn/totU*100).toFixed(1):0}%</div></div>
     <div class="kpi-card"><div class="kpi-label">单日峰值</div><div class="kpi-value rose">${maxD.toLocaleString()}</div><div class="kpi-sub">${fmtD(maxDate)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">累计分钟数</div><div class="kpi-value purple">${Math.round(totM).toLocaleString()}</div><div class="kpi-sub">日均 ${Math.round(totM/dates.length).toLocaleString()}</div></div>
+    <div class="kpi-card"><div class="kpi-label">单日分钟数峰值</div><div class="kpi-value purple">${Math.round(maxMin).toLocaleString()}</div><div class="kpi-sub">${fmtD(maxMinDate)}</div></div>
     <div class="kpi-card"><div class="kpi-label">美型 / 贴纸</div><div class="kpi-value cyan">${tSh.toLocaleString()} / ${tSt.toLocaleString()}</div><div class="kpi-sub">滤镜 ${tFi}${tMk?' | 美妆 '+tMk:''}</div></div>`;
 
   // Week Status Panel: 已上线 & 集成中客户
